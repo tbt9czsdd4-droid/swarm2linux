@@ -76,7 +76,7 @@ Keep the headset on and connected through the USB-A dongle throughout, as on Lin
 | 07 | `07-controls` | Button/dial mapping: assign each available function to the remappable button(s), one at a time, then restore the original. |
 | 08 | `08-device` | Rename the headset to `TEST1`, then back to `My Headset`. Voice prompts off/on if possible. Each auto-shutoff option. Any other device settings: change, then restore. |
 | 09 | `09-connectivity` | Open the transmitter / CrossPlay / Bluetooth pages and toggle anything there that won't drop the connection. |
-| 10 | `10-physical` | With Swarm II open: press the ANC button twice, Superhuman Hearing (power button) on and off, flip the mic up and down, roll each volume wheel. This shows how the app learns about changes made on the headset. |
+| 10 | `10-physical` | With Swarm II open: press the ANC button twice, Superhuman Hearing (power button) on and off, flip the mic up and down, roll the left (PC) wheel and the right (Bluetooth) wheel. This shows how the app learns about changes made on the headset. |
 | 11 | `11-profiles` | Anything else Swarm II offers for the headset: profiles, Dolby/spatial toggle, hotkeys. Change, then restore. |
 | 12 | `12-misc` | Any setting not covered above. |
 
