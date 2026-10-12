@@ -124,8 +124,8 @@ Writes marked ✎ were seen from Swarm II, with the values it used.
 | 110 | `2289` | the headset's own USB product ID (its cable ID) |
 | 120 | `00000000000` | serial number |
 | 130 | `4.107.703.0` | firmware version |
-| 140 | `1` | headset powered up: `0` while the battery is out (seen over the cable) **[seen]** |
-| 150 | `1` | wireless link between headset and transmitter, `0`/`1`, pushed by both ends **[seen]** |
+| 140 | `1` | number of transmitters the headset is connected to: `0` with the battery out, `2` once a second laptop's transmitter came up **[seen]** |
+| 150 | `1` | active transmitter (`1` = `TX1`, `2` = `TX2`); `0` while there is no link. Follows the CrossPlay button **[seen]** |
 | 160 | `2` | |
 
 #### `GSI`: general status
@@ -134,7 +134,7 @@ Writes marked ✎ were seen from Swarm II, with the values it used.
 | 200 | `1` | **[guess]** headset connected |
 | 210 | `0` | |
 | 220 | `My Headset` | headset name, user-editable in Swarm II **[capture]** |
-| 230 | `2` | HaloBattery saw `2` on battery, `0` on cable; stayed `2` while charging here |
+| 230 | `2` | wireless link state **[guess]**: briefly `0` while CrossPlay switched transmitters, then `2` **[seen]**; HaloBattery saw `0` on cable |
 | 240 | `65` | battery percent; `255` = unknown (battery pulled, fresh battery being measured) **[seen]** |
 | 250 | `0` | charging `0`/`1` **[seen]** |
 | 260 | `100` | stayed `100` across a battery swap; **[guess]** spare battery in the dock |
@@ -156,9 +156,17 @@ Writes marked ✎ were seen from Swarm II, with the values it used.
 | 330–350 | `0` | |
 
 #### `TX1`..`TX4`: CrossPlay transmitter slots (keys 400, 420, 440, 460)
-`{"info":[a,b,c,d,e,VID,PID,firmware,address],"control":[x,y,z]}`. Slot 1 seen as
-`info ["2","17","0","100","1","10F5","2287","4.107.703.0","C5:43:B0:09:56:F3"]`, `control ["0","100","100"]`.
-Empty slots are all zeros.
+`{"info":[state,b,c,d,e,VID,PID,firmware,address],"control":[x,y,z]}` **[seen]**:
+
+- `info[0]` state: `2` = active (audio from this transmitter), `1` = connected but not active, `0` = empty slot.
+  Pressing CrossPlay swaps `2` and `1` between the slots and changes `Inf.150` to the active slot number.
+- `info[1]`: `17` (0x11) for this PC's `2287` transmitter, `33` (0x21) for a second laptop's `2288` transmitter.
+- `info[3]`: `100` for `TX1`, `0` for `TX2`. `info[4]`: `1` when present.
+- `info[5..8]`: the transmitter's USB VID, PID, firmware and radio address.
+- `control`: `["0","100","100"]` for both live transmitters, all `0` for an empty slot.
+
+Seen: `TX1` = `10f5:2287` `C5:43:B0:09:56:F3` (this PC), `TX2` = `10f5:2288` `CB:AF:2C:41:F2:F3` (a second
+laptop's transmitter). `2288` is the third product ID listed in Swarm II's `Update.ini`.
 
 #### `3DT`
 | key | seen | meaning |
@@ -168,7 +176,7 @@ Empty slots are all zeros.
 #### `Mic`
 | key | seen | ✎ written | meaning |
 |-----|------|-----------|---------|
-| 600 | `0` | | |
+| 600 | `0` | | mic muted: flip-to-mute up `1`, down `0` **[seen]** |
 | 610 | `51`, `84` | ✎ 100, 0, 84 | **[guess]** mic volume. The device pushed the new value *before* Swarm II's write, so it probably follows the Windows mic level (UAC feature unit 6) |
 | 620 | `70`, `85` | ✎ 0, 100, 85 | **[guess]** noise gate or sensitivity |
 | 630 | `0` | ✎ 1, 0 | **[guess]** a mic toggle: A.I. noise reduction or noise gate |
@@ -180,10 +188,10 @@ Empty slots are all zeros.
 |-----|------|-----------|---------|
 | 700 | `0` | ✎ 1, 0 | **[guess]** mic monitoring on/off |
 | 710 | `0`, `100` | ✎ 100, 0, 100 | **[guess]** mic monitoring volume |
-| 720 | `0`, `1` | ✎ 1, 0 | Superhuman Hearing on/off **[guess, strong]**; selecting an EQ preset pushes `720 = 0` **[seen]** |
+| 720 | `0`, `1` | ✎ 1, 0 | Superhuman Hearing on/off: the power button's short press toggles it **[seen]**; selecting an EQ preset pushes `720 = 0` **[seen]** |
 | 730 | `0` | ✎ 1, 2, 0 | Superhuman Hearing level (3 levels) **[guess, strong]** |
 | 740 | `60`, `100` | ✎ 0, 100 | Superhuman Hearing volume **[guess, strong]** |
-| 750 | `0` | ✎ 1, 0 | **[guess]** active noise cancellation on/off |
+| 750 | `0` | ✎ 1, 0 | active noise cancellation on/off: the ANC button toggles it, `1`/`0`/`1` for three presses **[seen]**. Each press only beeps; there are no voice prompts |
 | 760 | `100` | ✎ 0, 100 | **[guess]** active noise cancellation level |
 
 Swarm II's hotkey labels name these pairs: "SUPERHUMAN HEARING ON/OFF / VOLUME", "ACTIVE NOISE CANCELLATION ON/OFF /

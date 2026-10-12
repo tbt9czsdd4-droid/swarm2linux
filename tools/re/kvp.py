@@ -192,9 +192,12 @@ def main():
                     print(f"{rec}: {e}")
             c.pushed.clear()
             end = time.monotonic() + args.seconds
-            while time.monotonic() < end:
-                c.drain(0.5)
-                _print_pushed(c)
+            try:
+                while time.monotonic() < end:
+                    c.drain(0.5)
+                    _print_pushed(c)
+            except KeyboardInterrupt:
+                pass
     log.close()
 
 
