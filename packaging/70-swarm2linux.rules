@@ -5,5 +5,7 @@
 KERNEL=="hidraw*", ATTRS{idVendor}=="10f5", ATTRS{idProduct}=="2287", TAG+="uaccess"
 # 10f5:229b Stealth Pro II transmitter dock
 KERNEL=="hidraw*", ATTRS{idVendor}=="10f5", ATTRS{idProduct}=="229b", TAG+="uaccess"
-# 10f5:229e Stealth Pro II headset on its USB-C cable
+# 10f5:2289 Stealth Pro II PC headset on its USB-C cable
+KERNEL=="hidraw*", ATTRS{idVendor}=="10f5", ATTRS{idProduct}=="2289", TAG+="uaccess"
+# 10f5:229e Stealth Pro II headset on its USB-C cable (other SKU)
 KERNEL=="hidraw*", ATTRS{idVendor}=="10f5", ATTRS{idProduct}=="229e", TAG+="uaccess"

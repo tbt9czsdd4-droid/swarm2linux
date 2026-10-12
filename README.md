@@ -22,7 +22,8 @@ tunnels a JSON key/value protocol through them. This project speaks that protoco
 |-------------|------------------------------------------|
 | `10f5:2287` | Stealth Pro II PC, USB-A transmitter     |
 | `10f5:229b` | Stealth Pro II transmitter dock          |
-| `10f5:229e` | Stealth Pro II headset on its USB-C cable |
+| `10f5:2289` | Stealth Pro II PC headset on its USB-C cable (seen) |
+| `10f5:229e` | Stealth Pro II headset on its USB-C cable (other SKU, from HaloBattery) |
 
 ## Reverse-engineering tools
 
