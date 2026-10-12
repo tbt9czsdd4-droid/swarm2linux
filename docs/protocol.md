@@ -23,6 +23,12 @@ The HID report descriptor (68 bytes) has two collections **[seen]**:
   Fast Forward, Rewind.
 - Vendor page `0xFF13` usage `0x01`: output report `0x06` and input report `0x07`, 61 data bytes each.
 
+The headset on its own USB-C cable enumerates as `10f5:2289` "Stealth Pro II PC Headset" **[seen]**, with the same
+audio interfaces and the same two collections. It adds a standard Telephony collection (page `0x0B`, report
+`0x05`: hook switch, phone mute, LED outputs) for softphones. It speaks the same protocol and serves the same
+records as the transmitter, and both can be connected at the same time **[seen]**. After the battery is pulled
+while the cable is in, the headset re-enumerates at full speed instead of high speed **[seen]**.
+
 ## 2. HID framing
 
 ```
@@ -60,10 +66,10 @@ Airoha RACE; the same as `race-toolkit`'s `librace/packets.py`:
 
 | cmd    | type | payload examples | notes |
 |--------|------|------------------|-------|
-| `2c80` | 5C   | `00`, `01`, `03` | **[guess]** link/connection state |
-| `2cb1` | 5D   | `00 02 01 01 93 34 92 ed ca c7 80 01`, `00 02 00 01 93 34 92 ed ca c7 ff 00` | contains a Bluetooth address `c7:ca:ed:92:34:93` (little-endian); byte 2 is `01` or `00` **[guess]** link up/down |
-| `3103` | 5D   | `01` | |
-| `3110` | 5D   | `39`, `19` | |
+| `2c80` | 5C   | `00`, `01`, `03`, `1b` | Transmitter: `01` when the headset drops (battery pulled), `03` when it is back. Headset cable: `1b` a few seconds before `03`, also right before a wheel moved. **[guess]** link or activity state |
+| `2cb1` | 5D   | `00 02 01 01 93 34 92 ed ca c7 80 01`, `00 02 00 01 93 34 92 ed ca c7 ff 00` | wireless link to the headset: byte 2 `01` up / `00` down, together with the headset's address `c7:ca:ed:92:34:93` (little-endian) **[seen]** on battery pull and reinsertion |
+| `3103` | 5D   | `01` | sent right after the link comes up **[seen]** |
+| `3110` | 5D   | `39`, `19`, `03` | |
 
 ## 4. Turtle Beach application layer: RACE cmd `9902`
 
@@ -97,8 +103,8 @@ All keys are hexadecimal strings and all values are strings.
 | 110 | `2289`          | product ID; not the transmitter's `2287`, **[guess]** the headset's |
 | 120 | `00000000000`   | serial number |
 | 130 | `4.107.703.0`   | firmware version |
-| 140 | `1`             | |
-| 150 | `1`             | |
+| 140 | `1`             | headset powered up: `0` while the battery is out (seen over the cable), `1` again after boot **[seen]** |
+| 150 | `1`             | wireless link between headset and transmitter: `0` while down, `1` once linked; both ends push it **[seen]** |
 | 160 | `2`             | |
 
 ### Record `GSI`, general status info (asked with `SGSI`)
@@ -108,18 +114,25 @@ All keys are hexadecimal strings and all values are strings.
 | 200 | `1`  | **[guess]** headset connected |
 | 210 | `0`  | |
 | 220 | `My Headset` | headset name, user-editable in Swarm II **[capture]** |
-| 230 | `2`  | `2` on battery, `0` on cable **[capture]** |
-| 240 | `65` | battery percent **[capture]** |
-| 250 | `0`  | charging `0`/`1` **[capture]** |
-| 260 | `100` | **[guess]** spare battery in the dock |
+| 230 | `2`  | HaloBattery saw `2` on battery and `0` on cable **[capture]**; here it stayed `2` while charging over the cable **[seen]** |
+| 240 | `65` | battery percent; `255` = unknown, pushed when the battery is pulled and while a fresh one is measured **[seen]** |
+| 250 | `0`  | charging: `1` within a second of plugging USB power into the headset, `0` on unplug **[seen]** |
+| 260 | `100` | stayed `100` across a battery swap **[seen]**; **[guess]** spare battery in the dock |
 | 270 | `0`  | |
 | 280 | `4`  | enum, `1` on battery / `2` on cable in HaloBattery's run **[capture]** |
-| 290 | `3`  | enum, `2` / `4` in HaloBattery's run **[capture]** |
-| 2a0 | `42` | **[guess]** a volume or level |
+| 290 | `3`  | power state: `3` on battery, `5` charging over USB **[seen]** (HaloBattery saw `2` / `4`) |
+| 2a0 | `42` | a volume wheel, `0`–`100` in uneven steps (0, 1, 3, 6, 8, 12, 16, 21, 26, 30, 36, 42, 48, 54, 62, 71, 76, 87, 93, 100), pushed on every step **[seen]**; which wheel is not settled yet |
 | 2b0 | `60` | **[guess]** a volume or level |
 | 2c0 | `50` | **[guess]** a volume or level |
 | 2d0 | `78` | **[guess]** a volume or level |
 | 2e0 | `0`  | |
+
+### Physical controls that push nothing in `Inf` or `GSI` [seen]
+
+ANC button, Superhuman Hearing (power button), mic flip-to-mute, mic boom detach, CrossPlay switch, Bluetooth button,
+and at least one of the three volume wheels. Their state must live in other records. Both records we know of are
+asked with `S` + name, which may mean *subscribe*. Records for the other controls would need their own ask, which
+the Swarm II captures should reveal.
 
 ## 5. Open questions
 
