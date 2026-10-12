@@ -121,7 +121,7 @@ All keys are hexadecimal strings and all values are strings.
 | 270 | `0`  | |
 | 280 | `4`  | enum, `1` on battery / `2` on cable in HaloBattery's run **[capture]** |
 | 290 | `3`  | power state: `3` on battery, `5` charging over USB **[seen]** (HaloBattery saw `2` / `4`) |
-| 2a0 | `42` | a volume wheel, `0`–`100` in uneven steps (0, 1, 3, 6, 8, 12, 16, 21, 26, 30, 36, 42, 48, 54, 62, 71, 76, 87, 93, 100), pushed on every step **[seen]**; which wheel is not settled yet |
+| 2a0 | `42` | **left wheel: 2.4 GHz (PC) volume**, `0`–`100` in uneven steps (0, 1, 3, 6, 8, 12, 16, 21, 26, 30, 36, 42, 48, 54, 62, 71, 76, 87, 93, 100), pushed on every step **[seen]**. The same wheel also makes KDE show its volume pop-up, so it probably sends Consumer Volume Up/Down (report `0x0C`) as well **[guess]** |
 | 2b0 | `60` | **[guess]** a volume or level |
 | 2c0 | `50` | **[guess]** a volume or level |
 | 2d0 | `78` | **[guess]** a volume or level |
@@ -130,11 +130,16 @@ All keys are hexadecimal strings and all values are strings.
 ### Physical controls that push nothing in `Inf` or `GSI` [seen]
 
 ANC button, Superhuman Hearing (power button), mic flip-to-mute, mic boom detach, CrossPlay switch, Bluetooth button,
-and at least one of the three volume wheels. Their state must live in other records. Both records we know of are
+and the right wheel. The right wheel is the Bluetooth volume: it changes the phone's volume over Bluetooth and
+nothing on USB. This PC headset has two wheels, not the three that reviews list. Their state must live in other records. Both records we know of are
 asked with `S` + name, which may mean *subscribe*. Records for the other controls would need their own ask, which
 the Swarm II captures should reveal.
 
 ## 5. Open questions
+
+0. Does the left wheel really send Consumer Volume Up/Down? If so, KDE changes the *default* sink's volume, which may
+   not be the headset, while the headset changes its own volume (`2a0`) as well. The Linux app may need to keep
+   the two in step.
 
 1. What do bytes 1–4 of the `9902` header mean (op, token), and does the device check them?
 2. What are the write commands? Needs Swarm II captures (see `windows-harvest-checklist.md`).
