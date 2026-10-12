@@ -6,7 +6,7 @@ This is an independent interoperability project and is not affiliated with Turtl
 
 ## Status
 
-Reverse engineering, phase 1 (read-only first contact). See [docs/PLAN.md](docs/PLAN.md) for the roadmap and
+Reverse engineering: all 26 records can be read and the EQ written from Linux; confirming the meaning of the remaining keys. See [docs/PLAN.md](docs/PLAN.md) for the roadmap and
 [docs/protocol.md](docs/protocol.md) for what is known about the protocol.
 
 ## How it works
@@ -33,6 +33,10 @@ tunnels a JSON key/value protocol through them. This project speaks that protoco
 python3 tools/re/probe.py            # read-only: open a session and dump the device state
 python3 tools/re/monitor.py --session  # log every packet the device pushes (survives replugging)
 python3 tools/re/decode_log.py --changes captures/linux/monitor-*.jsonl  # replay a saved log
+python3 tools/re/pcap2jsonl.py capture.pcapng -o capture.jsonl  # Windows USBPcap capture -> same log format
+python3 tools/re/kvp.py dump --save    # read all 26 records, save a snapshot
+python3 tools/re/kvp.py watch 60       # subscribe to everything and print pushed changes
+python3 tools/re/kvp.py set 0x1210 2   # write a key (only keys/values Swarm II was seen writing)
 ```
 
 The hidraw node must be readable and writable by your user. Install `packaging/70-swarm2linux.rules` if it is not.

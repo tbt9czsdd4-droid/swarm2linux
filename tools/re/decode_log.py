@@ -13,7 +13,23 @@ import time
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from race_hid import Reassembler  # noqa: E402
+from race_hid import RACE_TYPES, Reassembler, json_documents, printable_runs  # noqa: E402
+
+
+def describe_out(report: bytes) -> str:
+    """One line for an output report: the RACE packet, and for cmd 9902 the header bytes and the name or JSON."""
+    n = report[1]
+    race = report[3:3 + n]
+    if len(race) < 6 or race[0] != 0x05:
+        return f"raw {report[:3 + n].hex(' ')}"
+    rtype, length, cmd = race[1], int.from_bytes(race[2:4], "little"), int.from_bytes(race[4:6], "little")
+    payload = race[6:4 + length]
+    head = f"{RACE_TYPES.get(rtype, hex(rtype))} cmd={cmd:04x} tgt={report[2]:02x}"
+    if cmd != 0x9902:
+        return f"{head} {payload.hex(' ')}"
+    docs = json_documents(payload)
+    tail = " ".join(json.dumps(d, separators=(",", ":")) for d in docs) if docs else " ".join(printable_runs(payload[12:]))
+    return f"{head} hdr={payload[:12].hex(' ')} | {payload[12:16].hex(' ')} | {tail}"
 
 
 def main():
@@ -21,6 +37,7 @@ def main():
     ap.add_argument("logs", nargs="+")
     ap.add_argument("--json-only", action="store_true", help="print only JSON documents")
     ap.add_argument("--changes", action="store_true", help="print only KVP changes, one line per key")
+    ap.add_argument("--no-out", action="store_true", help="do not print the host's output reports")
     args = ap.parse_args()
 
     state = {}
@@ -35,7 +52,13 @@ def main():
                 if e["note"].startswith("open"):
                     reasms.pop(e["note"].split()[-1] if len(e["note"].split()) > 2 else "", None)
                 continue
-            if e.get("dir") != "in" or "hex" not in e:
+            if "hex" not in e:
+                continue
+            if e.get("dir") == "out":
+                if not args.no_out:
+                    print(f"{ts} [{e.get('src', '')}] >> {describe_out(bytes.fromhex(e['hex']))}")
+                continue
+            if e.get("dir") != "in":
                 continue
             src = e.get("src", "")
             reasm = reasms.setdefault(src, Reassembler())

@@ -29,6 +29,7 @@ from typing import Iterator, List, Optional
 VID = 0x10F5
 KNOWN_PIDS = {
     0x2287: "Stealth Pro II PC (USB-A transmitter)",
+    0x2288: "Stealth Pro II (variant listed in Swarm II Update.ini)",
     0x2289: "Stealth Pro II PC headset (USB-C cable)",
     0x229B: "Stealth Pro II transmitter dock",
     0x229E: "Stealth Pro II headset (USB-C cable)",
