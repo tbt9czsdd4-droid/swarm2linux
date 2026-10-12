@@ -1,0 +1,17 @@
+[workspace]
+members = ["crates/race-hid", "crates/tb-proto", "crates/stealthctl"]
+resolver = "3"
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[workspace.dependencies]
+race-hid = { path = "crates/race-hid" }
+tb-proto = { path = "crates/tb-proto" }
+anyhow = "1"
+clap = { version = "4", features = ["derive"] }
+libc = "0.2"
+serde_json = { version = "1", features = ["preserve_order"] }
+thiserror = "2"

@@ -6,7 +6,7 @@ This is an independent interoperability project and is not affiliated with Turtl
 
 ## Status
 
-Reverse engineering: all 26 records can be read and the EQ written from Linux; confirming the meaning of the remaining keys. See [docs/PLAN.md](docs/PLAN.md) for the roadmap and
+`stealthctl` reads all 26 records and changes EQ, Superhuman Hearing, ANC, mic monitoring and mic settings. Still to capture: button mapping, renaming, mic EQ presets, saving custom EQs (see [docs/windows-harvest-2.md](docs/windows-harvest-2.md)). See [docs/PLAN.md](docs/PLAN.md) for the roadmap and
 [docs/protocol.md](docs/protocol.md) for what is known about the protocol.
 
 ## How it works
@@ -24,6 +24,24 @@ tunnels a JSON key/value protocol through them. This project speaks that protoco
 | `10f5:229b` | Stealth Pro II transmitter dock          |
 | `10f5:2289` | Stealth Pro II PC headset on its USB-C cable (seen) |
 | `10f5:229e` | Stealth Pro II headset on its USB-C cable (other SKU, from HaloBattery) |
+
+## stealthctl
+
+```sh
+cargo build --release
+./target/release/stealthctl status                 # battery, transmitters, EQ, ANC, mic, ...
+./target/release/stealthctl eq preset bass         # signature | bass | bass-treble | vocal
+./target/release/stealthctl eq band 1 -3.5         # custom EQ, dB in steps of 0.5
+./target/release/stealthctl shh on                 # Superhuman Hearing; also: off, level 1-3, volume 0-100
+./target/release/stealthctl anc on                 # also: off, level 0-100
+./target/release/stealthctl monitor volume 60      # mic monitoring; also: on, off
+./target/release/stealthctl mic gate 80            # also: volume 0-100, ai 0|1
+./target/release/stealthctl watch                  # print changes as they happen (buttons, wheel, battery)
+./target/release/stealthctl snapshot my.json       # save everything; `restore my.json` writes it back
+./target/release/stealthctl dump                   # every record as JSON
+```
+
+Set `RACE_HID_TRACE=1` to print every HID report.
 
 ## Reverse-engineering tools
 
