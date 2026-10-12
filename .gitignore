@@ -1,0 +1,14 @@
+# Rust
+/target/
+**/*.rs.bk
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+
+# Raw captures and dumps stay local; curated fixtures are committed under crates/*/tests/fixtures/
+/captures/
+
+# Files copied from a Swarm II install (vendor binaries, plugins, logs) - never commit these
+/harvest/

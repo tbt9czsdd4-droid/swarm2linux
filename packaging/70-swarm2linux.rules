@@ -1,0 +1,9 @@
+# Give the logged-in user access to the Turtle Beach Stealth Pro II vendor HID interface.
+# Install: sudo cp 70-swarm2linux.rules /etc/udev/rules.d/ && sudo udevadm control --reload && sudo udevadm trigger
+
+# 10f5:2287 Stealth Pro II PC (USB-A transmitter)
+KERNEL=="hidraw*", ATTRS{idVendor}=="10f5", ATTRS{idProduct}=="2287", TAG+="uaccess"
+# 10f5:229b Stealth Pro II transmitter dock
+KERNEL=="hidraw*", ATTRS{idVendor}=="10f5", ATTRS{idProduct}=="229b", TAG+="uaccess"
+# 10f5:229e Stealth Pro II headset on its USB-C cable
+KERNEL=="hidraw*", ATTRS{idVendor}=="10f5", ATTRS{idProduct}=="229e", TAG+="uaccess"
