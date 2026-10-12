@@ -4,6 +4,7 @@ Living spec. Every statement is tagged with where it comes from:
 
 - **[seen]**: observed on our own hardware (`10f5:2287`, firmware `4.107.703.0`)
 - **[capture]**: from a USB capture of Turtle Beach's Swarm II
+- **[user]**: from the user's notes on what they changed in Swarm II
 - **[guess]**: hypothesis, not yet tested
 
 ## 1. USB device
@@ -177,22 +178,25 @@ laptop's transmitter). `2288` is the third product ID listed in Swarm II's `Upda
 | key | seen | ✎ written | meaning |
 |-----|------|-----------|---------|
 | 600 | `0` | | mic muted: flip-to-mute up `1`, down `0` **[seen]** |
-| 610 | `51`, `84` | ✎ 100, 0, 84 | **[guess]** mic volume. The device pushed the new value *before* Swarm II's write, so it probably follows the Windows mic level (UAC feature unit 6) |
-| 620 | `70`, `85` | ✎ 0, 100, 85 | **[guess]** noise gate or sensitivity |
-| 630 | `0` | ✎ 1, 0 | **[guess]** a mic toggle: A.I. noise reduction or noise gate |
-| 640 | `1` | | |
+| 610 | `51`, `84` | ✎ 100, 0, 84 | mic volume **[user]**. The device pushed the new value *before* Swarm II's write, so it probably follows the Windows mic level (UAC feature unit 6) **[guess]** |
+| 620 | `70`, `85` | ✎ 0, 100, 85 | noise gate level **[user]** |
+| 630 | `0` | ✎ 1, 0 | A.I. noise reduction **[user]**; whether `1` means on or off is not known yet |
+| 640 | `1` | | **[guess]** noise gate on/off (the hotkey list has "NOISE GATE ON/OFF" as well as a volume) |
 | 650 | `0` | | |
 
 #### `SAF`
 | key | seen | ✎ written | meaning |
 |-----|------|-----------|---------|
-| 700 | `0` | ✎ 1, 0 | **[guess]** mic monitoring on/off |
-| 710 | `0`, `100` | ✎ 100, 0, 100 | **[guess]** mic monitoring volume |
+| 700 | `0` | ✎ 1, 0 | mic monitoring (sidetone) on/off: writing `1` from Linux made the user hear their own voice **[seen]** |
+| 710 | `0`, `100` | ✎ 100, 0, 100 | mic monitoring volume **[guess, strong]** |
 | 720 | `0`, `1` | ✎ 1, 0 | Superhuman Hearing on/off: the power button's short press toggles it **[seen]**; selecting an EQ preset pushes `720 = 0` **[seen]** |
 | 730 | `0` | ✎ 1, 2, 0 | Superhuman Hearing level (3 levels) **[guess, strong]** |
 | 740 | `60`, `100` | ✎ 0, 100 | Superhuman Hearing volume **[guess, strong]** |
 | 750 | `0` | ✎ 1, 0 | active noise cancellation on/off: the ANC button toggles it, `1`/`0`/`1` for three presses **[seen]**. Each press only beeps; there are no voice prompts |
-| 760 | `100` | ✎ 0, 100 | **[guess]** active noise cancellation level |
+| 760 | `100` | ✎ 0, 100 | active noise cancellation level **[guess, strong]** |
+
+No Transparency mode was seen: Swarm II only wrote ANC on/off and level, and its hotkeys only name those. `750 = 0`
+is probably plain "off" **[guess]**.
 
 Swarm II's hotkey labels name these pairs: "SUPERHUMAN HEARING ON/OFF / VOLUME", "ACTIVE NOISE CANCELLATION ON/OFF /
 LEVEL", "MIC MONITORING ON/OFF / VOLUME", "NOISE GATE ON/OFF / VOLUME", "A.I. NOISE REDUCTION".

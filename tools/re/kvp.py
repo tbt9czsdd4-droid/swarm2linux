@@ -40,10 +40,10 @@ CMD_KVP = 0x9902
 WRITABLE = {
     0x1210: (1, 4),                                       # AQG game EQ preset: 1 Signature, 2 Bass, 3 Bass&Treble, 4 Vocal
     **{k: (-90, 90) for k in range(0x1220, 0x12B1, 0x10)},  # AQG game EQ bands 1..10, steps of 5
-    0x700: (0, 1), 0x710: (0, 100),                       # SAF: probably mic monitoring on/off, volume
+    0x700: (0, 1), 0x710: (0, 100),                       # SAF: mic monitoring on/off, volume
     0x720: (0, 1), 0x730: (0, 2), 0x740: (0, 100),        # SAF: Superhuman Hearing on/off, level, volume
-    0x750: (0, 1), 0x760: (0, 100),                       # SAF: probably ANC on/off, level
-    0x610: (0, 100), 0x620: (0, 100), 0x630: (0, 1),      # Mic: to be confirmed
+    0x750: (0, 1), 0x760: (0, 100),                       # SAF: ANC on/off, level
+    0x610: (0, 100), 0x620: (0, 100), 0x630: (0, 1),      # Mic: volume, noise gate level, A.I. noise reduction
 }
 
 
