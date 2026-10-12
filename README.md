@@ -30,7 +30,8 @@ tunnels a JSON key/value protocol through them. This project speaks that protoco
 
 ```sh
 python3 tools/re/probe.py            # read-only: open a session and dump the device state
-python3 tools/re/monitor.py --session  # log every packet the device pushes
+python3 tools/re/monitor.py --session  # log every packet the device pushes (survives replugging)
+python3 tools/re/decode_log.py --changes captures/linux/monitor-*.jsonl  # replay a saved log
 ```
 
 The hidraw node must be readable and writable by your user. Install `packaging/70-swarm2linux.rules` if it is not.

@@ -29,6 +29,7 @@ from typing import Iterator, List, Optional
 VID = 0x10F5
 KNOWN_PIDS = {
     0x2287: "Stealth Pro II PC (USB-A transmitter)",
+    0x2289: "Stealth Pro II PC headset (USB-C cable)",
     0x229B: "Stealth Pro II transmitter dock",
     0x229E: "Stealth Pro II headset (USB-C cable)",
 }
@@ -95,12 +96,17 @@ def find_devices() -> List[HidrawInfo]:
     return found
 
 
-def default_device() -> HidrawInfo:
+def first_device() -> Optional[HidrawInfo]:
     devs = [d for d in find_devices() if d.vendor_collection]
-    if not devs:
-        raise SystemExit("no Turtle Beach device with a 0xFF13 vendor collection found")
     known = [d for d in devs if d.pid in KNOWN_PIDS]
-    return (known or devs)[0]
+    return (known or devs or [None])[0]
+
+
+def default_device() -> HidrawInfo:
+    dev = first_device()
+    if dev is None:
+        raise SystemExit("no Turtle Beach device with a 0xFF13 vendor collection found")
+    return dev
 
 
 # ---------------------------------------------------------------------------
@@ -303,7 +309,16 @@ class RaceHid:
         """GET_REPORT(Input, 0x07) over the control endpoint."""
         buf = bytearray(REPORT_SIZE)
         buf[0] = REPORT_IN
-        n = fcntl.ioctl(self.fd, HIDIOCGINPUT(REPORT_SIZE), buf, True)
+        try:
+            n = fcntl.ioctl(self.fd, HIDIOCGINPUT(REPORT_SIZE), buf, True)
+        except OSError as e:
+            # the transmitter occasionally fails a control transfer (EPROTO/EPIPE/ETIMEDOUT) while
+            # it is busy; treat it as an idle poll. A gone device (ENODEV) still raises.
+            if e.errno not in (errno.EPROTO, errno.EPIPE, errno.ETIMEDOUT, errno.EAGAIN, errno.EIO):
+                raise
+            if self.log:
+                self.log({"t": time.time(), "dir": "in", "via": "get_report", "error": e.strerror})
+            return bytes([REPORT_IN, 0, 0])
         data = bytes(buf[:n])
         self._emit("in", data, "get_report")
         return data
