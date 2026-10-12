@@ -1,15 +1,14 @@
 #!/usr/bin/env python3
 """Log every packet the device sends, until Ctrl-C or --duration.
 
-Use it while working the headset's physical controls to see which keys change. Survives unplugging: it waits for
-a Turtle Beach device with the vendor collection (transmitter, dock or headset cable) and reopens it, sending the
-SInf session opener on every (re)open when --session is given. Every report is logged to
+Use it while working the headset's physical controls to see which keys change. Watches every Turtle Beach device
+with the vendor collection at once (transmitter, dock, headset cable) and follows plugging and unplugging, sending
+the SInf session opener on every open when --session is given. Every report is logged to
 captures/linux/monitor-<time>.jsonl.
 """
 from __future__ import annotations
 
 import argparse
-import errno
 import json
 import os
 import sys
@@ -18,7 +17,7 @@ import time
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from frames import ASK_SINF  # noqa: E402
-from race_hid import KNOWN_PIDS, JsonlLog, RaceHid, Reassembler, first_device  # noqa: E402
+from race_hid import KNOWN_PIDS, JsonlLog, RaceHid, Reassembler, find_devices  # noqa: E402
 
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 
@@ -45,39 +44,57 @@ def main():
         return float("inf") if not args.duration else args.duration - elapsed()
 
     print(f"log -> {log.f.name}")
-    waiting_said = False
+    open_devs = {}  # path -> (RaceHid, Reassembler, label)
+    next_scan = 0.0
     try:
         while remaining() > 0:
-            info = first_device()
-            if info is None:
-                if not waiting_said:
-                    out("-- no device, waiting")
-                    waiting_said = True
-                time.sleep(0.5)
-                continue
-            waiting_said = False
-            label = KNOWN_PIDS.get(info.pid, f"{info.pid:04x}")
-            out(f"-- open {info.path} {info.pid:04x} {label}")
-            log({"t": time.time(), "note": f"open {info.path} {info.pid:04x}"})
-            try:
-                with RaceHid(info.path, log=log) as dev:
-                    reasm = Reassembler()
+            if time.monotonic() >= next_scan:
+                next_scan = time.monotonic() + 1.0
+                for info in find_devices():
+                    if not info.vendor_collection or info.path in open_devs:
+                        continue
+                    src = f"{info.pid:04x}"
+                    try:
+                        dev = RaceHid(info.path, log=_tagged(log, src))
+                    except OSError:
+                        continue
+                    out(f"-- open {info.path} {src} {KNOWN_PIDS.get(info.pid, '?')}")
+                    log({"t": time.time(), "note": f"open {info.path} {src}"})
                     if args.session:
                         dev.write_report(ASK_SINF)
-                        log({"t": time.time(), "note": "ask sinf"})
-                    while remaining() > 0:
-                        for report in dev.reports(min(remaining(), 1.0), poll_get_report=args.poll):
-                            for p in reasm.feed(report):
-                                _show(p, state, out, f"{info.pid:04x}")
-            except OSError as e:
-                if e.errno not in (errno.ENODEV, errno.ENOENT, errno.EIO, errno.EPROTO, errno.ESHUTDOWN):
-                    raise
-                out(f"-- {info.path} gone ({e.strerror})")
-                log({"t": time.time(), "note": f"gone {info.path}: {e.strerror}"})
-                time.sleep(0.5)
+                        log({"t": time.time(), "note": f"ask sinf {src}"})
+                    open_devs[info.path] = (dev, Reassembler(), src)
+                if not open_devs:
+                    if not waiting_said:
+                        out("-- no device, waiting")
+                        waiting_said = True
+                else:
+                    waiting_said = False
+            for path, (dev, reasm, src) in list(open_devs.items()):
+                try:
+                    report = dev.get_input_report()
+                except OSError as e:
+                    out(f"-- {path} [{src}] gone ({e.strerror})")
+                    log({"t": time.time(), "note": f"gone {path} {src}: {e.strerror}"})
+                    dev.close()
+                    del open_devs[path]
+                    continue
+                for p in reasm.feed(report):
+                    _show(p, state, out, src)
+            time.sleep(args.poll)
     except KeyboardInterrupt:
         pass
+    for dev, _, _ in open_devs.values():
+        dev.close()
     log.close()
+
+
+def _tagged(log, src):
+    """A logger that stamps every event with the device it came from."""
+    def emit(event):
+        event["src"] = src
+        log(event)
+    return emit
 
 
 def _show(p, state, out, src):
