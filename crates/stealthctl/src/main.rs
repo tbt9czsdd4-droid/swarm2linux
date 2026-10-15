@@ -525,7 +525,11 @@ fn status(b: &mut Backend) -> Result<()> {
         _ => "unknown".to_string(),
     };
     let charging = if on(&v, "charging") == "on" { ", charging" } else { "" };
-    println!("Headset       {}: battery {battery}{charging}", text(&v, "name").unwrap_or("?"));
+    let link = match v.get("headset_link") {
+        Some(Typed::Bool(false)) => " (headset off or out of range)",
+        _ => "",
+    };
+    println!("Headset       {}: battery {battery}{charging}{link}", text(&v, "name").unwrap_or("?"));
     let tx = match v.get("transmitters") {
         Some(Typed::Texts(t)) if !t.is_empty() => t.iter().map(|e| format!("TX{e}")).collect::<Vec<_>>().join(", "),
         _ => "none".to_string(),
@@ -624,9 +628,16 @@ fn watch(b: &mut Backend, limit: Option<Duration>) -> Result<()> {
         }
         Backend::Direct(client) => {
             let mut state = read_all(client)?;
+            let mut link = client.headset_link();
             eprintln!("watching; Ctrl-C to stop");
             while limit.is_none_or(|l| start.elapsed() < l) {
-                for doc in client.wait_updates(Duration::from_millis(500))? {
+                let docs = client.wait_updates(Duration::from_millis(500))?;
+                if client.headset_link() != link {
+                    link = client.headset_link();
+                    let what = if link == Some(true) { "up" } else { "down" };
+                    println!("{:8.1}s  headset link {what}", start.elapsed().as_secs_f64());
+                }
+                for doc in docs {
                     let before = state.clone();
                     for key in state.apply(&doc) {
                         let old = before.raw(key).map_or("-".to_string(), show_json);

@@ -149,7 +149,7 @@ fn main() -> Result<()> {
                 if let Err(e) = daemon.run(&path, &label) {
                     eprintln!("stealthd: {} lost: {e:#}", path.display());
                 }
-                daemon.publish(None, &State::new());
+                daemon.publish(None, &State::new(), None);
                 daemon.fail_pending("the headset disconnected");
             }
             None => {
@@ -193,7 +193,7 @@ impl Daemon {
         for doc in client.take_updates() {
             state.apply(&doc);
         }
-        self.publish(Some(label.to_string()), &state);
+        self.publish(Some(label.to_string()), &state, client.headset_link());
 
         loop {
             match self.queue.recv_timeout(IDLE_POLL) {
@@ -205,37 +205,37 @@ impl Daemon {
                         for doc in await_pushes(&mut client)? {
                             state.apply(&doc);
                         }
-                        self.publish(Some(label.to_string()), &state);
+                        self.publish(Some(label.to_string()), &state, client.headset_link());
                     }
                     let _ = req.reply.send_blocking(result);
                 }
                 Err(RecvTimeoutError::Timeout) => {}
                 Err(RecvTimeoutError::Disconnected) => return Ok(()),
             }
+            let link = client.headset_link();
             let docs = client.poll()?;
-            if !docs.is_empty() {
+            if !docs.is_empty() || client.headset_link() != link {
                 for doc in &docs {
                     state.apply(doc);
                 }
-                self.publish(Some(label.to_string()), &state);
+                self.publish(Some(label.to_string()), &state, client.headset_link());
             }
         }
     }
 
     /// Store the new values and signal the ones that changed.
-    fn publish(&mut self, device: Option<String>, state: &State) {
-        let new = values::values(state);
+    fn publish(&mut self, device: Option<String>, state: &State, link: Option<bool>) {
+        let mut new = values::values(state);
+        // the link indication when one arrived, else whether the transmitter reports an active link
+        if let Some(up) = link.or_else(|| state.int(keys::ACTIVE_TRANSMITTER).map(|t| t > 0)) {
+            new.insert("headset_link", Typed::Bool(up));
+        }
         let mut changed: HashMap<String, Value<'static>> = HashMap::new();
         {
             let mut shared = self.shared.lock().unwrap();
             for (name, v) in &new {
                 if shared.values.get(name) != Some(v) {
                     changed.insert(name.to_string(), to_value(v));
-                }
-            }
-            for name in shared.values.keys() {
-                if !new.contains_key(name) {
-                    changed.insert(name.to_string(), Value::from(""));
                 }
             }
             if shared.device != device {

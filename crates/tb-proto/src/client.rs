@@ -10,6 +10,9 @@ use crate::doc::Document;
 use crate::frame::{CMD_KVP, Message, MessageKind, Request, Token};
 use crate::{Error, READ_ONCE, Result, State, keys};
 
+/// The transmitter's indication that the headset's radio link went up or down.
+const CMD_LINK: u16 = 0x2CB1;
+
 /// Talks to one transmitter or headset.
 ///
 /// Replies are matched to requests by their echoed token. Documents pushed for subscriptions arrive
@@ -19,6 +22,7 @@ pub struct Client<T: ReportIo> {
     reasm: Reassembler,
     last: Token,
     updates: VecDeque<Document>,
+    link: Option<bool>,
     /// Pause between polls while the device has nothing to say.
     pub poll_interval: Duration,
     /// How long to wait for a reply.
@@ -56,6 +60,7 @@ impl<T: ReportIo> Client<T> {
             reasm: Reassembler::new(),
             last,
             updates: VecDeque::new(),
+            link: None,
             poll_interval: Duration::from_millis(60),
             timeout: Duration::from_secs(2),
             retries: 1,
@@ -188,6 +193,12 @@ impl<T: ReportIo> Client<T> {
         Ok(self.take_updates())
     }
 
+    /// Whether the headset's radio link to the transmitter is up, from the transmitter's link indication (RACE
+    /// `2cb1`). `None` until one arrived: the transmitter sends it when the link changes, not on request.
+    pub fn headset_link(&self) -> Option<bool> {
+        self.link
+    }
+
     /// Pushed documents received so far.
     pub fn take_updates(&mut self) -> Vec<Document> {
         self.updates.drain(..).collect()
@@ -240,6 +251,11 @@ impl<T: ReportIo> Client<T> {
         let data = report.len() > 1 && report[1] > 0;
         let mut reply = None;
         for packet in self.reasm.feed(&report) {
+            if packet.cmd == CMD_LINK && packet.kind == RaceType::Indication && packet.payload.len() > 2 {
+                // 00 02 <01 up | 00 down> 01 <headset address, 6 bytes> ...
+                self.link = Some(packet.payload[2] == 1);
+                continue;
+            }
             if packet.cmd != CMD_KVP {
                 continue;
             }
@@ -379,6 +395,20 @@ mod tests {
         assert!(sent[0].ends_with(br#"{"0x1210":"16"}"#));
         assert!(sent[1].ends_with(br#"{"0x1220":"0"}"#));
         assert!(sent[11].ends_with(br#"{"0x12c0":"TEST"}"#));
+    }
+
+    #[test]
+    fn follows_the_link_indication() {
+        // link down then up, as the transmitter sent them when the battery was pulled and put back
+        let io = Scripted::new(vec![]);
+        let mut c = client(io, Token { session: 1, counter: 1, seq: 1 });
+        assert_eq!(c.headset_link(), None);
+        c.io.queue.push_back(hex("071200055d0e00b12c00020001933492edcac7ff00"));
+        c.poll().unwrap();
+        assert_eq!(c.headset_link(), Some(false));
+        c.io.queue.push_back(hex("071200055d0e00b12c00020101933492edcac78001"));
+        c.poll().unwrap();
+        assert_eq!(c.headset_link(), Some(true));
     }
 
     #[test]

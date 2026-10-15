@@ -59,7 +59,7 @@ const SIMPLE: &[(&str, u16, Kind)] = &[
 /// Besides the simple ones: `battery` (-1 while unknown), `game_eq_bands` / `mic_eq_bands` (10 values in tenths
 /// of a dB), `game_eq_slots` / `mic_eq_slots` (the 5 custom preset names, "" for a free slot; slot n is preset
 /// `15 + n`), `hub_led_1` / `hub_led_2`, and `transmitters` (one "<slot> <product id> <active|standby>" entry per
-/// connected transmitter).
+/// connected transmitter). The headset's radio link is not part of the records; see `Client::headset_link`.
 pub fn values(state: &State) -> BTreeMap<&'static str, Typed> {
     let mut out = BTreeMap::new();
     for &(name, key, kind) in SIMPLE {
