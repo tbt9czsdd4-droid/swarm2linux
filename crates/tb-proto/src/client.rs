@@ -96,13 +96,48 @@ impl<T: ReportIo> Client<T> {
         self.document(Request::Read(record.to_string()))
     }
 
-    /// Write one key. Only keys and values Swarm II was seen writing are accepted.
+    /// Write one numeric key. Only keys and values Swarm II was seen writing are accepted.
     pub fn set(&mut self, key: u16, value: i64) -> Result<()> {
         let s = keys::writable(key).ok_or(Error::NotWritable(key))?;
-        if !(s.min..=s.max).contains(&value) {
-            return Err(Error::OutOfRange { name: s.name, value, min: s.min, max: s.max });
+        if !s.values.accepts(value) {
+            return Err(Error::Invalid { name: s.name, value: value.to_string() });
         }
-        let json = serde_json::json!({ format!("{key:#x}"): value.to_string() }).to_string();
+        self.write_kvp(key, &value.to_string())
+    }
+
+    /// Write one text key (a preset name).
+    pub fn set_text(&mut self, key: u16, value: &str) -> Result<()> {
+        let s = keys::writable(key).ok_or(Error::NotWritable(key))?;
+        if !s.values.accepts_text(value) {
+            return Err(Error::Invalid { name: s.name, value: value.to_string() });
+        }
+        self.write_kvp(key, value)
+    }
+
+    /// Save bands as a custom preset in `slot` (16..=20) the way Swarm II does: select the slot (the device
+    /// refuses because it is still empty), write every band, then write the name, which stores the preset.
+    pub fn save_preset(&mut self, eq: &keys::EqKeys, slot: i64, bands: &[i64; keys::BAND_COUNT], name: &str) -> Result<()> {
+        let s = keys::writable(eq.name).ok_or(Error::NotWritable(eq.name))?;
+        if !s.values.accepts_text(name) {
+            return Err(Error::Invalid { name: s.name, value: name.to_string() });
+        }
+        match self.set(eq.preset, slot) {
+            Ok(()) | Err(Error::Nack(_)) => {}
+            Err(e) => return Err(e),
+        }
+        for (i, &value) in bands.iter().enumerate() {
+            self.set(eq.band(i), value)?;
+        }
+        self.set_text(eq.name, name)
+    }
+
+    /// Delete a custom preset by name.
+    pub fn delete_preset(&mut self, eq: &keys::EqKeys, name: &str) -> Result<()> {
+        self.set_text(eq.delete, name)
+    }
+
+    fn write_kvp(&mut self, key: u16, value: &str) -> Result<()> {
+        let json = serde_json::json!({ format!("{key:#x}"): value }).to_string();
         let reply = self.transact(&Request::SetKvp(json))?;
         if reply.is_set_ack() { Ok(()) } else { Err(Error::Nack(key)) }
     }
@@ -287,8 +322,28 @@ mod tests {
     fn refuses_unknown_keys_and_ranges() {
         let mut c = client(Scripted::new(vec![]), Token { session: 1, counter: 1, seq: 1 });
         assert!(matches!(c.set(keys::NAME, 1), Err(Error::NotWritable(0x220))));
-        assert!(matches!(c.set(keys::GAME_EQ_PRESET, 9), Err(Error::OutOfRange { .. })));
+        assert!(matches!(c.set(keys::GAME_EQ_PRESET, 9), Err(Error::Invalid { .. })));
+        assert!(matches!(c.set_text(keys::GAME_EQ_NAME, ""), Err(Error::Invalid { .. })));
         assert!(c.io().sent.is_empty());
+    }
+
+    #[test]
+    fn save_preset_follows_swarm_ii() {
+        // the slot selection is refused (68 80), every band and the name are acked
+        let nack = "071200055b0e0002996880aaa51c00000000000000";
+        let ack = |counter: u8, seq: u8| format!("071200055b0e0002996843aa{counter:02x}{seq:02x}00000000000000");
+        let mut replies = vec![vec![nack.to_string()]];
+        for i in 0..11u8 {
+            replies.push(vec![ack(0xA6 + i, 0x1D + i)]);
+        }
+        let io = Scripted::new(replies.iter().map(|r| r.iter().map(String::as_str).collect()).collect());
+        let mut c = client(io, Token { session: 0xAA, counter: 0xA4, seq: 0x1B });
+        c.save_preset(&keys::GAME_EQ, 16, &[0; 10], "TEST").unwrap();
+        let sent = &c.io().sent;
+        assert_eq!(sent.len(), 12);
+        assert!(sent[0].ends_with(br#"{"0x1210":"16"}"#));
+        assert!(sent[1].ends_with(br#"{"0x1220":"0"}"#));
+        assert!(sent[11].ends_with(br#"{"0x12c0":"TEST"}"#));
     }
 
     #[test]

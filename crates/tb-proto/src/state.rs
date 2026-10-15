@@ -37,11 +37,21 @@ pub enum TransmitterState {
 /// An equalizer as the headset reports it.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Equalizer {
-    /// `0` for custom bands, otherwise a preset number.
+    /// `0` for unsaved custom bands, `1..=4` a built-in preset, `16..=20` a saved custom preset.
     pub preset: Option<i64>,
     pub name: Option<String>,
     /// Band gains in tenths of a dB.
     pub bands: Vec<Option<i64>>,
+}
+
+/// A saved custom EQ preset (`CG1..CG5`, `CM1..CM5`).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CustomPreset {
+    /// The preset number that selects it: 16 for slot 1 … 20 for slot 5.
+    pub number: i64,
+    pub name: String,
+    /// Band gains in tenths of a dB.
+    pub bands: Vec<i64>,
 }
 
 impl State {
@@ -107,12 +117,41 @@ impl State {
         self.int(keys::BATTERY).filter(|v| (0..=100).contains(v)).map(|v| v as u8)
     }
 
-    pub fn equalizer(&self, preset: u16, bands: u16, name: u16) -> Equalizer {
+    pub fn equalizer(&self, eq: &keys::EqKeys) -> Equalizer {
         Equalizer {
-            preset: self.int(preset),
-            name: self.text(name).map(str::to_string),
-            bands: (0..keys::BAND_COUNT as u16).map(|i| self.int(bands + i * 0x10)).collect(),
+            preset: self.int(eq.preset),
+            name: self.text(eq.name).map(str::to_string),
+            bands: (0..keys::BAND_COUNT).map(|i| self.int(eq.band(i))).collect(),
         }
+    }
+
+    /// The saved custom presets; empty slots (no name) are left out.
+    pub fn custom_presets(&self, eq: &keys::EqKeys) -> Vec<CustomPreset> {
+        let mut out = Vec::new();
+        for (i, key) in eq.slots.iter().enumerate() {
+            let Some(slot) = self.raw(*key) else { continue };
+            let name = slot.get("name").and_then(Value::as_str).unwrap_or_default();
+            if name.is_empty() {
+                continue;
+            }
+            let bands = slot.get("bands").and_then(Value::as_array).map(|b| {
+                b.iter().filter_map(|v| v.as_str().and_then(|s| s.parse().ok())).collect()
+            });
+            out.push(CustomPreset {
+                number: keys::FIRST_CUSTOM_PRESET + i as i64,
+                name: name.to_string(),
+                bands: bands.unwrap_or_default(),
+            });
+        }
+        out
+    }
+
+    /// The preset number of the first empty custom slot, if the slots are known and one is free.
+    pub fn free_custom_slot(&self, eq: &keys::EqKeys) -> Option<i64> {
+        eq.slots.iter().enumerate().find_map(|(i, key)| {
+            let name = self.raw(*key)?.get("name")?.as_str()?;
+            name.is_empty().then_some(keys::FIRST_CUSTOM_PRESET + i as i64)
+        })
     }
 
     pub fn transmitters(&self) -> Vec<Transmitter> {
@@ -170,10 +209,22 @@ mod tests {
         let tx = s.transmitters();
         assert_eq!(tx.len(), 1);
         assert_eq!((tx[0].slot, tx[0].state, tx[0].product_id.as_str()), (2, TransmitterState::Standby, "2288"));
-        let eq = s.equalizer(keys::GAME_EQ_PRESET, keys::GAME_EQ_BANDS, keys::GAME_EQ_NAME);
+        let eq = s.equalizer(&keys::GAME_EQ);
         assert_eq!(eq.preset, Some(2));
         assert_eq!(eq.name.as_deref(), Some("Bass Boost"));
         assert_eq!(&eq.bands[..4], &[Some(50), Some(50), Some(35), None]);
+    }
+
+    #[test]
+    fn lists_custom_presets_and_free_slots() {
+        let mut s = State::new();
+        s.apply(&doc(json!({"OR": "CG1", "KVP": {"1700": {"name": "TEST", "bands": ["0","0","0","0","65","0","0","0","0","0"]}}})));
+        s.apply(&doc(json!({"OR": "CG2", "KVP": {"1720": {"name": "", "bands": ["0","0","0","0","0","0","0","0","0","0"]}}})));
+        let presets = s.custom_presets(&keys::GAME_EQ);
+        assert_eq!(presets.len(), 1);
+        assert_eq!((presets[0].number, presets[0].name.as_str(), presets[0].bands[4]), (16, "TEST", 65));
+        assert_eq!(s.free_custom_slot(&keys::GAME_EQ), Some(17));
+        assert_eq!(s.free_custom_slot(&keys::MIC_EQ), None);
     }
 
     #[test]

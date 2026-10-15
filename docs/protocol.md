@@ -5,6 +5,8 @@ Living spec. Every statement is tagged with where it comes from:
 - **[seen]**: observed on our own hardware (`10f5:2287`, firmware `4.107.703.0`)
 - **[capture]**: from a USB capture of Turtle Beach's Swarm II
 - **[user]**: from the user's notes on what they changed in Swarm II
+- **[ui]**: from screenshots of Swarm II
+- **[dll]**: from setting names in Swarm II's Stealth Pro II device module (`STEALTH_PRO_II.dll` 1.0.0.4)
 - **[guess]**: hypothesis, not yet tested
 
 ## 1. USB device
@@ -92,7 +94,8 @@ response: 68 <op'> <session> <counter> <seq> 00 00 00 00 00 00 00 <body>
 | `01` | `61 00` `R` + name | read a record once. Swarm II reads `BT` this way; `S` + `BT` gets no answer **[seen]** |
 | `03` | `b7` `set_kvp` `ff` + JSON | write keys, e.g. `{"0x1210":"2"}`. Keys are written `0x`-prefixed, values as strings |
 
-- Response `op'` is `45` for a reply carrying a document and `43` for the ack of a `set_kvp`. A document reply's
+- Response `op'` is `45` for a reply carrying a document, `43` for the ack of a `set_kvp`, and `80` when the device
+  refuses a write (seen for selecting an empty custom preset slot). A document reply's
   body is `61 <x> 62 32 <y> 21 01 ff` followed by the JSON, or `c1 32 21 01 ff` followed by the array for `index`.
 - After a `set_kvp` ack the device pushes the changed keys as an `UP` document, including keys that changed as a
   consequence (a preset change pushes its band values) **[seen]**.
@@ -142,7 +145,7 @@ Writes marked ✎ were seen from Swarm II, with the values it used.
 | 270 | `0` | |
 | 280 | `4` | enum; HaloBattery saw `1` on battery, `2` on cable |
 | 290 | `3` | power state: `3` on battery, `5` charging over USB **[seen]** |
-| 2a0 | `42` | left wheel: 2.4 GHz volume `0`–`100`, uneven steps (0, 1, 3, 6, 8, 12, 16, 21, 26, 30, 36, 42, 48, 54, 62, 71, 76, 87, 93, 100). The wheel also makes KDE show its volume pop-up **[seen]** |
+| 2a0 | `42` | `Master_Volume_Level` **[dll, ui]**, also moved by the left wheel: 2.4 GHz volume `0`–`100`, uneven steps (0, 1, 3, 6, 8, 12, 16, 21, 26, 30, 36, 42, 48, 54, 62, 71, 76, 87, 93, 100). The wheel also makes KDE show its volume pop-up **[seen]** |
 | 2b0 | `60` | |
 | 2c0 | `50` | |
 | 2d0 | `78` | |
@@ -164,7 +167,10 @@ Writes marked ✎ were seen from Swarm II, with the values it used.
 - `info[1]`: `17` (0x11) for this PC's `2287` transmitter, `33` (0x21) for a second laptop's `2288` transmitter.
 - `info[3]`: `100` for `TX1`, `0` for `TX2`. `info[4]`: `1` when present.
 - `info[5..8]`: the transmitter's USB VID, PID, firmware and radio address.
-- `control`: `["0","100","100"]` for both live transmitters, all `0` for an empty slot.
+- `control`: `["0","100","100"]` for both live transmitters, all `0` for an empty slot. Most likely the charging
+  hub / transmitter settings Swarm II shows as voice prompt (`None`), LED 1 and LED 2 brightness (`100`, `100`); the
+  device module names them `Charging_Hub_Voice_Prompt`, `Charging_Hub_Led_Brightness_1/_2` and
+  `Transmitter_Voice_Prompt`, `Transmitter_Led_Brightness` **[dll, ui; mapping guess]**. Writing them is not captured.
 
 Seen: `TX1` = `10f5:2287` `C5:43:B0:09:56:F3` (this PC), `TX2` = `10f5:2288` `CB:AF:2C:41:F2:F3` (a second
 laptop's transmitter). `2288` is the third product ID listed in Swarm II's `Update.ini`.
@@ -175,74 +181,106 @@ laptop's transmitter). `2288` is the third product ID listed in Swarm II's `Upda
 | 500–530 | `0` | **[guess]** 3D / spatial audio |
 
 #### `Mic`
+
+Swarm II's microphone panel, top to bottom: Mute microphone, Sensitivity, Monitoring (slider), Noise gate (toggle and
+slider), AI noise reduction **[ui]**. The device module's setting names: `Mute`, `Sensitivity_Level`,
+`Monitoring_Enable`, `Monitoring_Level`, `Noise_Gate_Enable`, `Noise_Gate_Level`, `AI_Noise_Reduction` **[dll]**.
+Matched with the order of the round-1 writes:
+
 | key | seen | ✎ written | meaning |
 |-----|------|-----------|---------|
-| 600 | `0` | | mic muted: flip-to-mute up `1`, down `0` **[seen]** |
-| 610 | `51`, `84` | ✎ 100, 0, 84 | mic volume **[user]**. The device pushed the new value *before* Swarm II's write, so it probably follows the Windows mic level (UAC feature unit 6) **[guess]** |
-| 620 | `70`, `85` | ✎ 0, 100, 85 | noise gate level **[user]** |
-| 630 | `0` | ✎ 1, 0 | A.I. noise reduction **[user]**; whether `1` means on or off is not known yet |
-| 640 | `1` | | **[guess]** noise gate on/off (the hotkey list has "NOISE GATE ON/OFF" as well as a volume) |
+| 600 | `0` | | mute: flip-to-mute up `1`, down `0` **[seen]** |
+| 610 | `51`, `84` | ✎ 100, 0, 84 | sensitivity **[ui]**. The device pushed the new value *before* Swarm II's write, so it probably follows the Windows mic level (UAC feature unit 6) **[guess]** |
+| 620 | `70`, `85`, `65` | ✎ 0, 100, 85 | monitoring level (hearing your own voice) **[ui, user]** |
+| 630 | `0` | ✎ 1, 0 | AI noise reduction, `1` = on: the page showed "Off" with `0`, then Swarm II wrote `1` and `0` for on and off **[ui, capture]** |
+| 640 | `1` | | **[guess]** monitoring enable: Swarm II only offers it as a hotkey, never wrote it |
 | 650 | `0` | | |
 
 #### `SAF`
+
 | key | seen | ✎ written | meaning |
 |-----|------|-----------|---------|
-| 700 | `0` | ✎ 1, 0 | mic monitoring (sidetone) on/off: writing `1` from Linux made the user hear their own voice **[seen]** |
-| 710 | `0`, `100` | ✎ 100, 0, 100 | mic monitoring volume **[guess, strong]** |
+| 700 | `0` | ✎ 1, 0 | noise gate on/off **[ui, user]**. Round 1 labelled this "mic monitoring" because the user heard their own voice after `700 = 1` was written; that test had no off/on comparison and monitoring (`620`) was on all along |
+| 710 | `0`, `100` | ✎ 100, 0, 100 | noise gate level **[ui, user]** |
 | 720 | `0`, `1` | ✎ 1, 0 | Superhuman Hearing on/off: the power button's short press toggles it **[seen]**; selecting an EQ preset pushes `720 = 0` **[seen]** |
-| 730 | `0` | ✎ 1, 2, 0 | Superhuman Hearing level (3 levels) **[guess, strong]** |
-| 740 | `60`, `100` | ✎ 0, 100 | Superhuman Hearing volume **[guess, strong]** |
+| 730 | `0` | ✎ 1, 2, 0 | Superhuman Hearing mode (`SHH_Preset`): `0` Legacy, `1` Footsteps, `2` Gunshots **[ui, dll]** |
+| 740 | `60`, `100` | ✎ 0, 100 | Superhuman Hearing level (`SHH_Level`), slider 0–100 **[ui, dll]** |
 | 750 | `0` | ✎ 1, 0 | active noise cancellation on/off: the ANC button toggles it, `1`/`0`/`1` for three presses **[seen]**. Each press only beeps; there are no voice prompts |
-| 760 | `100` | ✎ 0, 100 | active noise cancellation level **[guess, strong]** |
+| 760 | `100` | ✎ 0, 100 | ANC level: the slider runs from `AMB` (ambient, outside sound let in) at `0` to `ANC` at `100`, with a centre mark **[ui]**. So "transparency" is the low end of this slider, not a separate mode |
 
-No Transparency mode was seen: Swarm II only wrote ANC on/off and level, and its hotkeys only name those. `750 = 0`
-is probably plain "off" **[guess]**.
+#### `Enc`: wheels **[guess]**
+`a00 = 1`, `a10 = 2`, `a20 = 1`, `a30 = 50`. Swarm II's Assignment page wrote `a20` = 2, 3, 4, 5, then 1 **[capture]**;
+what the five values mean is not known yet.
 
-Swarm II's hotkey labels name these pairs: "SUPERHUMAN HEARING ON/OFF / VOLUME", "ACTIVE NOISE CANCELLATION ON/OFF /
-LEVEL", "MIC MONITORING ON/OFF / VOLUME", "NOISE GATE ON/OFF / VOLUME", "A.I. NOISE REDUCTION".
-
-#### `Enc`: encoder / wheels **[guess]**
-`a00 = 1`, `a10 = 2`, `a20 = 1`, `a30 = 50`.
-
-#### `Btn`: button mapping **[guess]**
-`b00`, `b10`, `b20` = `0`.
+#### `Btn`: buttons **[guess]**
+`b00`, `b10`, `b20` = `0`. The Assignment page wrote `b20` = 1, 2, then 0 **[capture]**.
 
 #### `AQG`: game audio EQ
 | key | seen | ✎ written | meaning |
 |-----|------|-----------|---------|
 | 1200 | `0` | | |
-| 1210 | `1` | ✎ 2, 3, 4, 1 | preset: `0` custom, `1` Signature Sound, `2` Bass Boost, `3` Bass & Treble Boost, `4` Vocal Boost **[seen]** |
-| 1220–12b0 | `0` | ✎ −90…90 | the 10 bands, in tenths of a dB **[guess]**; values snap to steps of 5 (−86 → −85, 2 → 0, −1 → 0). Writing a band sets `1210` to `0` and `12c0` to `""` **[seen]** |
-| 12c0 | `Signature Sound` | | preset name |
+| 1210 | `1` | ✎ 1–4, 16 | preset: `0` unsaved custom bands, `1` Signature Sound, `2` Bass Boost, `3` Bass & Treble Boost, `4` Vocal Boost **[seen]**, `16`–`20` the custom presets in slots `CG1`–`CG5` **[seen]** for 16 and 17 |
+| 1220–12b0 | `0` | ✎ −90…90 | the 10 bands in tenths of a dB, at 32, 63, 125, 250, 500 Hz, 1, 2, 4, 8, 16 kHz, ±9 dB **[ui]**. Values snap to steps of 5 (−86 → −85, 64 → 65, 2 → 0). Writing a band sets `1210` to `0` and `12c0` to `""` **[seen]** |
+| 12c0 | `Signature Sound` | ✎ `TEST` | preset name; writing it saves the current bands as a custom preset (below) |
 
-Preset band values pushed by the device (bands 1–10; omitted = 0):
-- Bass Boost: `50 50 35`
-- Bass & Treble Boost: bands 7–10 `30 50 50 50` (bands 1–3 kept from Bass Boost in the capture's sequence; to check)
-- Vocal Boost: `0 0 20 35 35 35 20 0 0 0`
+Built-in preset bands (bands 1–10, tenths of a dB). A push lists only the bands that changed, so these follow from
+applying the pushes in the order the presets were selected (Signature → Bass → Bass & Treble → Vocal) **[seen]**:
+
+| `1210` | name | bands 1–10 |
+|--------|------|------------|
+| 1 | Signature Sound | all 0 |
+| 2 | Bass Boost | `50 50 35 0 0 0 0 0 0 0` |
+| 3 | Bass & Treble Boost | `50 50 35 0 0 0 30 50 50 50` |
+| 4 | Vocal Boost | `0 0 20 35 35 35 20 0 0 0` |
 
 #### `AQM`: mic EQ
-Same layout as `AQG` with keys 1300–13c0: `1310` preset, `1320`–`13b0` bands, `13c0` name.
+Same layout as `AQG` with keys 1300–13c0. Bands at 100, 160, 250, 400, 630 Hz, 1, 1.6, 2.5, 4, 6.3 kHz **[ui]**.
+Presets **[seen]**:
 
-#### `CEC`, `CG1`..`CG5`, `CM1`..`CM5`: custom EQ slots
-`CEC`: `1600 = 0, 1610 = "", 1620 = 0, 1630 = "", 1640 = 0, 1650 = ""` (**[guess]** active custom presets and their
-names). `CG*` (game) and `CM*` (mic): `{"name":"","bands":[10 values]}`. Saving a custom EQ has not been captured.
+| `1310` | name | bands 1–10 (tenths of a dB) |
+|--------|------|-----------------------------|
+| 1 | Signature Sound | all 0 |
+| 2 | Full | `-30 50 50 30 0 -11 0 0 0 0` |
+| 3 | Clarity | `-30 -30 -20 0 0 0 30 40 40 0` |
+| 4 | Smooth | `0 0 0 0 -20 -20 0 20 20 0` |
+
+Derived the same way, from pushes in the order 1 → 2 → 3 → 4 (seen twice, identical both times).
+
+#### Custom presets: `CEC`, `CG1`..`CG5`, `CM1`..`CM5`
+
+- `CG1`..`CG5` (keys 1700, 1720, …, 1780) and `CM1`..`CM5` (1800, …, 1880) hold `{"name":"","bands":[10 values]}`;
+  an empty name is a free slot.
+- `CEC.1600` counts the saved game presets, `CEC.1620` the mic presets **[seen]**. `1610` and `1630` hold the name of
+  the last deleted game and mic preset; `1640`/`1650` stay `0`/`""` **[seen]**.
+- **Save** (Swarm II's sequence, reproduced from Linux) **[capture, seen]**:
+  1. select the first free slot's preset number (`1210 = 16`). The device refuses with reply op `80`, because the
+     slot is empty.
+  2. write all 10 bands (`1220`…`12b0`).
+  3. write the name (`12c0 = "TEST"`). The device stores the bands under that name in the first free slot, pushes
+     the slot record, raises the count in `CEC` and selects the preset (`1210 = 16`).
+
+  A second preset went to `CG2` as preset `17` **[seen]**.
+- **Delete**: write the preset's name to `1610` (game) or `1630` (mic). The device empties the slot and lowers the
+  count **[capture, seen]**.
+- Select a saved preset like a built-in one: `1210 = 16`…`20`.
 
 ## 5. Open questions
 
 0. Does the left wheel really send Consumer Volume Up/Down? If so, KDE changes the *default* sink's volume, which may
-   not be the headset, while the headset changes its own volume (`2a0`) as well. The Linux app may need to keep
-   the two in step.
-
-1. Confirm the meaning of the `SAF` and `Mic` keys by listening (mic monitoring, ANC, noise gate, AI noise reduction).
-2. Not captured yet: ANC/Transparency mode, button mapping (`Btn`), wheel settings (`Enc`), renaming (`220`), mic EQ
-   presets (`AQM`), saving custom EQs (`CG*`/`CM*`/`CEC`), voice prompts, auto-off.
-3. How are writes longer than one report sent?
-4. What do the unsolicited `2c80` / `2cb1` / `3103` / `3110` packets mean?
+   not be the headset, while the headset changes its own volume (`2a0`) as well.
+1. The Assignment page values: `Btn.b20` (0–2) and `Enc.a20` (1–5), and the other `Btn`/`Enc` keys.
+2. Not captured yet: auto shut-off (None/5/10/20/30 minutes), wake on motion, charging hub voice prompt and LED
+   brightness, the "Audio master volume" toggle (`Master_Volume_Enable`), monitoring enable (`640`?).
+3. Unknown keys: `GSI` 200, 210, 260, 270, 280, 2b0, 2c0, 2d0, 2e0; `Mic` 650; `BT` 300–350; `3DT` 500–530
+   (the device module also has settings for Waves 3D, chat boost and game/chat mix, which this headset's pages do not
+   show).
+4. How are writes longer than one report sent? (None seen so far; preset names keep requests short.)
 5. Does `target = 80` reach the headset directly?
 
 ## Sources
 
-- Our own Swarm II 1.0.0.59 capture (device module 1.0.0.4, firmware 4.107.703.0): `captures/windows/` (not committed).
+- Our own Swarm II 1.0.0.59 captures, rounds 1 and 2 (device module 1.0.0.4, firmware 4.107.703.0), screenshots and
+  the device module's strings: `captures/` (not committed).
 
 - HaloBattery `providers/turtlebeach.py` and `docs/protocols.md` (MIT): the Swarm II capture frames and the GSI
   keys 220/240/250. https://github.com/HeyOkay/HaloBattery/pull/194

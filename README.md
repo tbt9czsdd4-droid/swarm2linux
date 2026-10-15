@@ -6,7 +6,7 @@ This is an independent interoperability project and is not affiliated with Turtl
 
 ## Status
 
-`stealthctl` reads all 26 records and changes EQ, Superhuman Hearing, ANC, mic monitoring and mic settings. Still to capture: button mapping, renaming, mic EQ presets, saving custom EQs (see [docs/windows-harvest-2.md](docs/windows-harvest-2.md)). See [docs/PLAN.md](docs/PLAN.md) for the roadmap and
+`stealthctl` reads all 26 records and changes both EQs (presets, bands, saving and deleting custom presets), Superhuman Hearing, ANC, mic monitoring, noise gate, sensitivity and AI noise reduction. Still to capture: button/wheel assignment, power options, charging hub LEDs (see [docs/windows-harvest-3.md](docs/windows-harvest-3.md)). See [docs/PLAN.md](docs/PLAN.md) for the roadmap and
 [docs/protocol.md](docs/protocol.md) for what is known about the protocol.
 
 ## How it works
@@ -29,16 +29,20 @@ tunnels a JSON key/value protocol through them. This project speaks that protoco
 
 ```sh
 cargo build --release
-./target/release/stealthctl status                 # battery, transmitters, EQ, ANC, mic, ...
-./target/release/stealthctl eq preset bass         # signature | bass | bass-treble | vocal
-./target/release/stealthctl eq band 1 -3.5         # custom EQ, dB in steps of 0.5
-./target/release/stealthctl shh on                 # Superhuman Hearing; also: off, level 1-3, volume 0-100
-./target/release/stealthctl anc on                 # also: off, level 0-100
-./target/release/stealthctl monitor volume 60      # mic monitoring; also: on, off
-./target/release/stealthctl mic gate 80            # also: volume 0-100, ai 0|1
-./target/release/stealthctl watch                  # print changes as they happen (buttons, wheel, battery)
-./target/release/stealthctl snapshot my.json       # save everything; `restore my.json` writes it back
-./target/release/stealthctl dump                   # every record as JSON
+B=./target/release/stealthctl
+$B status                      # battery, transmitters, volume, both EQs, Superhuman Hearing, ANC, mic
+$B eq list                     # game EQ: bands with frequencies, built-in and custom presets
+$B eq preset bass              # signature | bass | bass-treble | vocal | <custom preset name>
+$B eq band 1 -3.5              # dB in steps of 0.5
+$B eq save MyPreset            # save the current bands as a custom preset (5 slots); eq delete MyPreset
+$B mic-eq preset clarity       # signature | full | clarity | smooth; band/save/delete as for eq
+$B shh on                      # Superhuman Hearing; off, mode legacy|footsteps|gunshots, level 0-100
+$B anc on                      # off, level 0-100 (0 = ambient, 100 = full noise cancellation)
+$B monitor level 60            # how loud you hear your own voice
+$B mic gate on                 # mic: sensitivity N, gate on|off, gate-level N, ai on|off
+$B watch                       # print changes as they happen (buttons, wheel, battery, CrossPlay)
+$B snapshot my.json            # save everything; `restore my.json` writes the settings back
+$B dump                        # every record as JSON
 ```
 
 Set `RACE_HID_TRACE=1` to print every HID report.
