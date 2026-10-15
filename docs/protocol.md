@@ -70,7 +70,7 @@ Airoha RACE; the same as `race-toolkit`'s `librace/packets.py`:
 | cmd    | type | payload examples | notes |
 |--------|------|------------------|-------|
 | `2c80` | 5C   | `00`, `01`, `03`, `1b` | Transmitter: `01` when the headset drops (battery pulled), `03` when it is back. Headset cable: `1b` a few seconds before `03`, also right before a wheel moved. **[guess]** link or activity state |
-| `2cb1` | 5D   | `00 02 01 01 93 34 92 ed ca c7 80 01`, `00 02 00 01 93 34 92 ed ca c7 ff 00` | wireless link to the headset: byte 2 `01` up / `00` down, together with the headset's address `c7:ca:ed:92:34:93` (little-endian) **[seen]** on battery pull and reinsertion |
+| `2cb1` | 5D   | `00 02 01 01 93 34 92 ed ca c7 80 01`, `00 02 00 01 93 34 92 ed ca c7 ff 00` | wireless link to the headset: byte 2 `01` up / `00` down, together with the headset's address `c7:ca:ed:92:34:93` (little-endian) **[seen]** on battery pull and reinsertion and on power-off/on. The transmitter sends no record push when the headset goes away; this indication is the only sign |
 | `3103` | 5D   | `01` | sent right after the link comes up **[seen]** |
 | `3110` | 5D   | `39`, `19`, `03` | |
 
@@ -99,6 +99,9 @@ response: 68 <op'> <session> <counter> <seq> 00 00 00 00 00 00 00 <body>
   body is `61 <x> 62 32 <y> 21 01 ff` followed by the JSON, or `c1 32 21 01 ff` followed by the array for `index`.
 - After a `set_kvp` ack the device pushes the changed keys as an `UP` document, including keys that changed as a
   consequence (a preset change pushes its band values) **[seen]**.
+- **Subscriptions live in the headset.** After the headset restarts (power off/on), no push arrives any more, not
+  even the periodic `BT` one, until the host subscribes again. Subscribing again ~1.5 s after the `2cb1` link-up
+  indication restores them **[seen]**.
 - A frame must fit one 62-byte report: a `set_kvp` JSON of up to 32 characters. How Swarm II writes longer values
   (custom EQ with a name) is not captured yet.
 - Swarm II also sends `9902` with payload `70 00 00 5c` right after its first `SInf` (no answer seen), and RACE cmd
