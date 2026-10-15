@@ -9,6 +9,67 @@ import { DevicePage } from "pages/device.slint";
 
 export { Headset, Choice, Prefs, About }
 
+// The tray icon and its menu. It has its own copy of the globals; Rust fills both. Tray menus show no check
+// marks (Slint 1.18), so the labels say what is on.
+export component Tray inherits SystemTrayIcon {
+    in property <image> battery-icon;
+    // the game EQ presets for the menu: the onboard ones and the saved custom ones
+    in property <[Choice]> presets;
+    // what the icon and the preset menu last showed, kept by Rust to rebuild them only on a change
+    in-out property <string> icon-key;
+    in-out property <string> menu-key;
+    callback open();
+    callback toggle-window();
+    callback preset-chosen(int);
+    callback quit();
+
+    icon: root.battery-icon;
+    title: "swarm2linux";
+    tooltip: "Stealth Pro II: " + (!Headset.daemon-running ? "stealthd is not running"
+        : !Headset.connected ? "no transmitter"
+        : !Headset.headset-link ? "headset off"
+        : Headset.battery < 0 ? "battery unknown"
+        : "battery " + Headset.battery + "%" + (Headset.charging ? ", charging" : ""));
+    clicked => { root.toggle-window(); }
+
+    Menu {
+        MenuItem {
+            title: "Open swarm2linux";
+            activated => { root.open(); }
+        }
+        MenuSeparator { }
+        MenuItem {
+            title: "Noise cancellation: " + (Headset.anc ? "on" : "off");
+            enabled: Headset.available;
+            activated => {
+                Headset.anc = !Headset.anc;
+                Headset.set-bool("anc", Headset.anc);
+            }
+        }
+        MenuItem {
+            title: "Superhuman Hearing: " + (Headset.superhuman ? "on" : "off");
+            enabled: Headset.available;
+            activated => {
+                Headset.superhuman = !Headset.superhuman;
+                Headset.set-bool("superhuman", Headset.superhuman);
+            }
+        }
+        Menu {
+            title: "Game EQ: " + (Headset.game-eq-name != "" ? Headset.game-eq-name : "custom");
+            for choice in root.presets: MenuItem {
+                title: choice.label;
+                enabled: Headset.available;
+                activated => { root.preset-chosen(choice.value); }
+            }
+        }
+        MenuSeparator { }
+        MenuItem {
+            title: "Quit";
+            activated => { root.quit(); }
+        }
+    }
+}
+
 export component AppWindow inherits Window {
     in-out property <int> page;
     // kept here so the tab stays while other pages are shown

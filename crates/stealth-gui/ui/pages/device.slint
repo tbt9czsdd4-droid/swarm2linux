@@ -165,7 +165,7 @@ component HubCard inherits Card {
 }
 
 component NotificationsCard inherits Card {
-    title: "Notifications";
+    title: "Notifications and startup";
 
     VerticalLayout {
         spacing: 8px;
@@ -199,6 +199,22 @@ component NotificationsCard inherits Card {
             }
         }
         Hint { text: "Shows the battery level in the system tray. Closing the window keeps the app there."; }
+    }
+    VerticalLayout {
+        spacing: 8px;
+        Setting {
+            label: "Start with the session";
+            Toggle {
+                name: "Start with the session";
+                y: (parent.height - self.height) / 2;
+                checked: Prefs.autostart;
+                toggled(on) => {
+                    Prefs.autostart = on;
+                    Prefs.changed();
+                }
+            }
+        }
+        Hint { text: Prefs.tray ? "Starts in the tray when you log in." : "Opens the window when you log in."; }
     }
 }
 

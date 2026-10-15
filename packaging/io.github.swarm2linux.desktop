@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=swarm2linux
+GenericName=Headset Settings
+Comment=Equalizer, noise cancellation, microphone and controls of the Turtle Beach Stealth Pro II
+Exec=stealth-gui
+Icon=io.github.swarm2linux
+Terminal=false
+Categories=Settings;HardwareSettings;
+Keywords=headset;Stealth Pro II;Turtle Beach;equalizer;ANC;microphone;
+SingleMainWindow=true

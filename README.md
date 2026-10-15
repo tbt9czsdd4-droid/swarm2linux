@@ -4,8 +4,11 @@ A Linux replacement for Turtle Beach's Swarm II app, starting with the **Stealth
 
 This is an independent interoperability project and is not affiliated with Turtle Beach.
 
+![The equalizer page](docs/screenshots/equalizer.png)
+
 ## Status
 
+The desktop app `stealth-gui` covers the same settings as Swarm II's pages, with a tray icon for the battery.
 `stealthctl` reads all 26 records and changes both EQs (presets, bands, saving and deleting custom presets), Superhuman Hearing, ANC, mic monitoring, noise gate, sensitivity and AI noise reduction. It also sets the button and wheel functions, auto shut-off, wake on motion and the charging hub LEDs; that covers every headset setting Swarm II offers on PC except the master-volume mute toggle. See [docs/PLAN.md](docs/PLAN.md) for the roadmap and
 [docs/protocol.md](docs/protocol.md) for what is known about the protocol.
 
@@ -25,14 +28,37 @@ tunnels a JSON key/value protocol through them. This project speaks that protoco
 | `10f5:2289` | Stealth Pro II PC headset on its USB-C cable (seen) |
 | `10f5:229e` | Stealth Pro II headset on its USB-C cable (other SKU, from HaloBattery) |
 
+## stealth-gui (desktop app)
+
+A Slint app in the style of Swarm II, with four pages:
+
+- **Settings:** master volume, Superhuman Hearing (mode and level), noise cancellation (ambient to full), and the
+  microphone (sensitivity, monitoring, noise gate, AI noise reduction).
+- **Equalizer:** game and mic EQ as a draggable 10-band graph, the onboard presets, and saving and deleting custom
+  presets.
+- **Controls:** what the mode button and the assignable wheel do.
+- **Device:** battery, transmitters and firmware, auto shut-off and wake on motion, the charging hub's LEDs,
+  battery pop-ups, the tray icon and starting with the session.
+
+![The settings page](docs/screenshots/settings.png)
+
+It is a client of `stealthd` and needs it running. The tray icon shows the battery as a headset whose ear cups
+fill up; its menu switches noise cancellation, Superhuman Hearing and the game EQ preset. Closing the window keeps
+the app in the tray (turn the tray off on the Device page to quit on close), and `stealth-gui --hidden` starts in
+the tray. `packaging/install-user.sh` installs it with a desktop entry.
+
+Built with [Slint](https://slint.dev) under its royalty-free licence; the Device page carries the credit.
+
 ## stealthd (background service)
 
 `stealthd` owns the headset: it finds it (preferring the transmitter over the headset's own cable), keeps a session
 with every record subscribed, follows unplugging, and serves everything on the session bus. It also shows a
-notification when the battery drops to 15 % and 5 %.
+notification when the battery drops to 15 % and 5 % (the `BatteryNotifications` property turns that off; it is
+kept in `~/.config/swarm2linux/stealthd.toml`).
 
 ```sh
-packaging/install-user.sh      # installs stealthctl + stealthd to ~/.local/bin and enables the user service
+packaging/install-user.sh      # installs stealthctl, stealthd and stealth-gui to ~/.local/bin, the desktop entry,
+                               # and enables the user service
 ```
 
 D-Bus: `io.github.swarm2linux.Stealthd`, object `/io/github/swarm2linux/Headset`, interface

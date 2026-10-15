@@ -4259,10 +4259,12 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "png",
+ "serde",
  "slint",
  "slint-build",
  "stealth-dbus",
  "tb-proto",
+ "toml",
  "zbus",
 ]
 
@@ -4286,8 +4288,10 @@ dependencies = [
  "anyhow",
  "async-channel",
  "race-hid",
+ "serde",
  "stealth-dbus",
  "tb-proto",
+ "toml",
  "zbus",
 ]
 

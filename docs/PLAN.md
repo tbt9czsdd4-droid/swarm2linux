@@ -135,16 +135,18 @@ The protocol spec in `docs/protocol.md` is the contract between the two tracks.
 - Low-battery and connection notifications via `org.freedesktop.Notifications`.
 - Systemd user unit `packaging/stealthd.service`.
 
-### Phase 7: GUI (`crates/stealth-gui`, cxx-qt + QML/Kirigami)
-- Pages mirroring Swarm II:
-  - **Status:** battery, charging, source, transmitters, firmware version
-  - **Audio:** presets, 10-band EQ editor, Superhuman Hearing
-  - **Noise control:** mode, strength, custom profiles
-  - **Mic:** gain, gate, mic EQ, AI noise reduction, monitoring
-  - **Controls:** button/dial mapping
-  - **Device:** name, prompts, auto-off
-- A system tray icon showing battery (StatusNotifierItem).
-- The GUI is only a D-Bus client of `stealthd`.
+### Phase 7: GUI (`crates/stealth-gui`, Rust + Slint) — done
+Changed from the first plan: Slint instead of cxx-qt + QML/Kirigami. It is pure Rust, needs no C++ bridge or extra
+-devel packages, and suits Swarm II's custom dark look; since 1.18 it has a StatusNotifierItem tray icon.
+- Pages after Swarm II's:
+  - **Settings:** master volume (read-only), Superhuman Hearing, noise cancellation (AMB to ANC), microphone
+  - **Equalizer:** game and mic EQ graph, onboard and custom presets, save and delete
+  - **Controls:** mode button and assignable wheel functions, on a drawing of the left earcup
+  - **Device:** status, power options, charging hub, notifications and startup, About
+- Tray icon with the battery level and a menu (Slint 1.18 tray menus have no check marks, so labels say what is on).
+- One instance at a time (`io.github.swarm2linux.Gui`), `--hidden` starts in the tray, optional autostart entry.
+- The GUI is only a D-Bus client of `stealthd`. Not shown because Swarm II's writes were never captured: the
+  master-volume mute toggle and the voice prompt. Swarm II's hotkeys belong to Phase 8.
 
 ### Phase 8: Replacements for Windows-only host features
 - **Per-app profiles:** a KWin script reports the active window to `stealthd` over D-Bus. This is the reliable way to see the active window on Plasma Wayland.

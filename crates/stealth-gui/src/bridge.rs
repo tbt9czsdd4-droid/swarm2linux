@@ -1,5 +1,6 @@
 //! The link to stealthd. One thread applies its `Changed` signals, one follows whether it runs and fetches every
-//! value when it starts, and one carries out writes in order. Everything reaches the UI through the event loop.
+//! value when it starts, and one carries out writes in order. Everything reaches the window and the tray through
+//! the event loop.
 
 use std::sync::mpsc;
 use std::thread;
@@ -8,7 +9,7 @@ use slint::{ComponentHandle, Weak};
 use stealth_dbus::DaemonClient;
 use tb_proto::values::Typed;
 
-use crate::{AppWindow, Headset, model};
+use crate::{AppWindow, Headset, Tray, model, tray};
 
 /// A write for stealthd.
 pub enum Command {
@@ -31,7 +32,30 @@ impl Bridge {
     }
 }
 
-pub fn start(ui: Weak<AppWindow>) -> zbus::Result<Bridge> {
+/// Where values are shown: the window and the tray each have their own `Headset` global.
+#[derive(Clone)]
+pub struct Views {
+    pub window: Weak<AppWindow>,
+    pub tray: Weak<Tray>,
+}
+
+impl Views {
+    /// Run `f` on every view's `Headset` global, on the UI thread.
+    fn update(&self, f: impl Fn(&Headset<'_>) + Send + 'static) {
+        let views = self.clone();
+        let _ = slint::invoke_from_event_loop(move || {
+            if let Some(w) = views.window.upgrade() {
+                f(&w.global::<Headset>());
+            }
+            if let Some(t) = views.tray.upgrade() {
+                f(&t.global::<Headset>());
+                tray::refresh(&t);
+            }
+        });
+    }
+}
+
+pub fn start(ui: Views) -> zbus::Result<Bridge> {
     let client = DaemonClient::new()?;
 
     let (c, u) = (client.clone(), ui.clone());
@@ -43,7 +67,7 @@ pub fn start(ui: Weak<AppWindow>) -> zbus::Result<Bridge> {
         };
         refresh(&c, &u);
         for values in changes {
-            let _ = u.upgrade_in_event_loop(move |w| model::apply(&w.global::<Headset>(), &values));
+            u.update(move |h| model::apply(h, &values));
         }
     });
 
@@ -57,7 +81,7 @@ pub fn start(ui: Weak<AppWindow>) -> zbus::Result<Bridge> {
             if running {
                 refresh(&c, &u);
             } else {
-                let _ = u.upgrade_in_event_loop(|w| w.global::<Headset>().set_daemon_running(false));
+                u.update(|h| h.set_daemon_running(false));
             }
         }
     });
@@ -74,7 +98,7 @@ pub fn start(ui: Weak<AppWindow>) -> zbus::Result<Bridge> {
             };
             if let Err(e) = result {
                 let message = describe(&e);
-                let _ = ui.upgrade_in_event_loop(move |w| w.global::<Headset>().set_error(message.into()));
+                ui.update(move |h| h.set_error(message.as_str().into()));
                 // the UI already shows the new value; put back what the headset has
                 refresh(&client, &ui);
             }
@@ -85,15 +109,14 @@ pub fn start(ui: Weak<AppWindow>) -> zbus::Result<Bridge> {
 }
 
 /// Fetch every value and stealthd's setting, and show them.
-fn refresh(client: &DaemonClient, ui: &Weak<AppWindow>) {
-    let values = client.values();
+fn refresh(client: &DaemonClient, ui: &Views) {
+    let values = client.values().ok();
     // an older stealthd does not have the setting
     let notifications = client.battery_notifications().ok();
-    let _ = ui.upgrade_in_event_loop(move |w| {
-        let h = w.global::<Headset>();
-        h.set_daemon_running(values.is_ok());
-        if let Ok(values) = values {
-            model::apply(&h, &values);
+    ui.update(move |h| {
+        h.set_daemon_running(values.is_some());
+        if let Some(values) = &values {
+            model::apply(h, values);
         }
         if let Some(on) = notifications {
             h.set_battery_notifications(on);

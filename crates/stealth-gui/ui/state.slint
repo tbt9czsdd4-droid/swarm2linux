@@ -98,6 +98,8 @@ export global About {
 export global Prefs {
     in-out property <bool> show-grid;
     in-out property <bool> tray: true;
+    // whether the app starts (in the tray) when the user logs in
+    in-out property <bool> autostart;
     // a preference was changed and should be saved
     callback changed();
 }
