@@ -34,8 +34,11 @@ fn main() -> Result<()> {
     headset.on_delete_preset(move |eq, name| b.send(Command::DeletePreset(eq.into(), name.into())));
     headset.on_valid_preset_name(|name| model::valid_preset_name(&name));
 
-    // development aid: STEALTH_GUI_SNAPSHOT=<file.png> saves the window as an image after
-    // STEALTH_GUI_SNAPSHOT_AFTER seconds (default 2) and quits
+    // development aids: STEALTH_GUI_PAGE=<n> opens page n (0-3); STEALTH_GUI_SNAPSHOT=<file.png> saves the window
+    // as an image after STEALTH_GUI_SNAPSHOT_AFTER seconds (default 2) and quits
+    if let Some(page) = std::env::var("STEALTH_GUI_PAGE").ok().and_then(|s| s.parse().ok()) {
+        ui.set_page(page);
+    }
     if let Some(path) = std::env::var_os("STEALTH_GUI_SNAPSHOT").map(PathBuf::from) {
         let after = std::env::var("STEALTH_GUI_SNAPSHOT_AFTER").ok().and_then(|s| s.parse().ok()).unwrap_or(2.0);
         let weak = ui.as_weak();

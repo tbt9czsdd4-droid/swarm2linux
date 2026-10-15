@@ -1,0 +1,305 @@
+// The frame around the pages: the icon rail, the header, the status banner, the overlay and the error toast.
+
+import { Theme } from "theme.slint";
+import { Headset } from "state.slint";
+
+export struct Page {
+    title: string,
+    icon: image,
+}
+
+export component Rail inherits Rectangle {
+    in property <[Page]> pages;
+    in-out property <int> current;
+
+    width: 76px;
+    background: Theme.rail;
+
+    VerticalLayout {
+        padding-top: 18px;
+        spacing: 6px;
+        alignment: start;
+
+        // the app's mark: a headset glyph in a ring
+        Rectangle {
+            height: 56px;
+            Rectangle {
+                width: 34px;
+                height: 34px;
+                border-radius: 17px;
+                border-width: 1.5px;
+                border-color: Theme.accent;
+                Image {
+                    width: 20px;
+                    height: 20px;
+                    source: @image-url("icons/headphones.svg");
+                    colorize: Theme.text;
+                }
+            }
+        }
+
+        for page[i] in root.pages: Rectangle {
+            height: 62px;
+            background: i == root.current ? #181c23 : (item.has-hover ? #15181e : transparent);
+            accessible-role: tab;
+            accessible-label: page.title;
+            accessible-checked: i == root.current;
+
+            Rectangle {
+                x: 0;
+                width: 3px;
+                background: i == root.current ? Theme.accent : transparent;
+            }
+            VerticalLayout {
+                alignment: center;
+                spacing: 5px;
+                Image {
+                    height: 22px;
+                    source: page.icon;
+                    colorize: i == root.current ? Theme.text : Theme.muted;
+                    image-fit: contain;
+                }
+                Text {
+                    text: page.title;
+                    color: i == root.current ? Theme.text : Theme.muted;
+                    font-size: 10px;
+                    horizontal-alignment: center;
+                }
+            }
+            item := TouchArea {
+                mouse-cursor: pointer;
+                clicked => { root.current = i; }
+            }
+        }
+    }
+
+    Rectangle {
+        x: parent.width - 1px;
+        width: 1px;
+        background: Theme.line;
+    }
+}
+
+// Battery level as a small cell with a fill, and the percentage.
+component Battery {
+    HorizontalLayout {
+        spacing: 8px;
+        Rectangle {
+            width: 26px;
+            height: 13px;
+            y: (parent.height - self.height) / 2;
+            border-width: 1.5px;
+            border-color: Theme.muted;
+            border-radius: 3px;
+            Rectangle {
+                x: 3px;
+                y: 3px;
+                height: parent.height - 6px;
+                width: Headset.battery < 0 ? 0 : (parent.width - 6px) * Headset.battery / 100;
+                border-radius: 1px;
+                background: Headset.battery >= 0 && Headset.battery <= 15 && !Headset.charging ? Theme.bad : Theme.good;
+            }
+            Rectangle {
+                x: parent.width + 1px;
+                y: 4px;
+                width: 2px;
+                height: parent.height - 8px;
+                background: Theme.muted;
+            }
+        }
+        Text {
+            text: Headset.battery < 0 ? "–" : Headset.battery + "%" + (Headset.charging ? " · charging" : "");
+            color: Theme.text;
+            font-size: Theme.label-size;
+            vertical-alignment: center;
+        }
+    }
+}
+
+export component Header {
+    in property <string> subtitle;
+
+    // what the status pill says, and its colour
+    private property <string> status: !Headset.daemon-running ? "stealthd stopped"
+        : !Headset.connected ? "No transmitter"
+        : !Headset.headset-link ? "Headset off"
+        : "Connected";
+    private property <color> status-color: Headset.available ? Theme.good : (Headset.daemon-running && Headset.connected ? Theme.warn : Theme.bad);
+
+    height: 104px;
+
+    HorizontalLayout {
+        padding-left: 32px;
+        padding-right: 32px;
+        padding-top: 26px;
+        padding-bottom: 16px;
+        spacing: 24px;
+
+        VerticalLayout {
+            spacing: 10px;
+            HorizontalLayout {
+                spacing: 8px;
+                alignment: start;
+                Text {
+                    text: "STEALTH";
+                    color: Theme.text;
+                    font-size: 26px;
+                    font-weight: 600;
+                    letter-spacing: 1px;
+                }
+                Text {
+                    text: "PRO II";
+                    color: Theme.muted;
+                    font-size: 26px;
+                    font-weight: 300;
+                    letter-spacing: 1px;
+                }
+            }
+            Text {
+                text: root.subtitle.to-uppercase();
+                color: Theme.muted;
+                font-size: Theme.label-size;
+                letter-spacing: 1px;
+            }
+        }
+
+        Rectangle { horizontal-stretch: 1; }
+
+        HorizontalLayout {
+            spacing: 22px;
+            alignment: end;
+            padding-bottom: 20px;
+            if Headset.available || Headset.battery >= 0: Battery { }
+            Rectangle {
+                width: 1px;
+                background: Theme.line;
+            }
+            HorizontalLayout {
+                spacing: 8px;
+                Rectangle {
+                    width: 8px;
+                    height: 8px;
+                    y: (parent.height - self.height) / 2;
+                    border-radius: 4px;
+                    background: root.status-color;
+                }
+                Text {
+                    text: root.status;
+                    color: Theme.text;
+                    font-size: Theme.label-size;
+                    vertical-alignment: center;
+                }
+            }
+        }
+    }
+}
+
+// Why settings cannot be changed right now, while stealthd runs.
+export component Banner inherits Rectangle {
+    in property <string> text;
+    background: #2a2416;
+    border-radius: Theme.radius;
+    border-width: 1px;
+    border-color: #4a3c1c;
+    height: 44px;
+
+    HorizontalLayout {
+        padding-left: 16px;
+        padding-right: 16px;
+        spacing: 12px;
+        Rectangle {
+            width: 8px;
+            height: 8px;
+            y: (parent.height - self.height) / 2;
+            border-radius: 4px;
+            background: Theme.warn;
+        }
+        Text {
+            text: root.text;
+            color: Theme.text;
+            font-size: Theme.label-size;
+            vertical-alignment: center;
+            overflow: elide;
+            horizontal-stretch: 1;
+        }
+    }
+}
+
+// Covers everything while stealthd is not running.
+export component Overlay inherits Rectangle {
+    background: #111419e6;
+
+    TouchArea { }
+
+    Rectangle {
+        width: 460px;
+        height: box.preferred-height;
+        background: Theme.card;
+        border-radius: Theme.radius;
+        box := VerticalLayout {
+            padding: 28px;
+            spacing: 14px;
+            Text {
+                text: "STEALTHD IS NOT RUNNING";
+                color: Theme.text;
+                font-size: Theme.title-size;
+                letter-spacing: 1px;
+            }
+            Text {
+                text: "This app talks to the headset through the stealthd service. Start it with:";
+                color: Theme.muted;
+                font-size: Theme.label-size;
+                wrap: word-wrap;
+            }
+            Rectangle {
+                background: Theme.field;
+                border-radius: 4px;
+                height: 38px;
+                Text {
+                    x: 14px;
+                    text: "systemctl --user start stealthd";
+                    color: Theme.text;
+                    font-family: "monospace";
+                    font-size: Theme.label-size;
+                    vertical-alignment: center;
+                }
+            }
+            Text {
+                text: "This window connects by itself once it runs.";
+                color: Theme.muted;
+                font-size: Theme.small-size;
+            }
+        }
+    }
+}
+
+// The last failed write, for a few seconds.
+export component Toast inherits Rectangle {
+    visible: Headset.error != "";
+    background: #3a1d22;
+    border-radius: Theme.radius;
+    border-width: 1px;
+    border-color: #6b2a33;
+    height: 44px;
+    width: Math.min(text.preferred-width + 48px, 640px);
+
+    text := Text {
+        x: 24px;
+        width: parent.width - 48px;
+        text: Headset.error;
+        color: Theme.text;
+        font-size: Theme.label-size;
+        vertical-alignment: center;
+        overflow: elide;
+    }
+
+    Timer {
+        interval: 6s;
+        running: Headset.error != "";
+        triggered => { Headset.error = ""; }
+    }
+
+    TouchArea {
+        clicked => { Headset.error = ""; }
+    }
+}

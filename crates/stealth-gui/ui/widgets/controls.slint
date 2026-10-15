@@ -1,0 +1,424 @@
+// The building blocks: cards, labels, toggles, sliders, dropdowns, segmented buttons, option lists and tabs.
+// Controls show what they are given and report what the user picked; the page writes it.
+
+import { Theme } from "../theme.slint";
+import { Choice } from "../state.slint";
+
+export component Card inherits Rectangle {
+    in property <string> title;
+    background: Theme.card;
+    border-radius: Theme.radius;
+
+    VerticalLayout {
+        padding: 24px;
+        padding-top: 20px;
+        spacing: 18px;
+        alignment: start;
+        Text {
+            text: root.title.to-uppercase();
+            color: Theme.text;
+            font-size: Theme.title-size;
+            font-weight: 500;
+            letter-spacing: 1px;
+        }
+        @children
+    }
+}
+
+// An uppercase setting name.
+export component Label inherits Text {
+    color: Theme.text;
+    font-size: Theme.label-size;
+    letter-spacing: 0.5px;
+    vertical-alignment: center;
+    overflow: elide;
+    horizontal-stretch: 1;
+}
+
+// A quiet explanation under or next to a setting.
+export component Hint inherits Text {
+    color: Theme.muted;
+    font-size: Theme.small-size;
+    wrap: word-wrap;
+}
+
+export component Toggle {
+    in property <bool> checked;
+    in property <bool> enabled: true;
+    in property <string> name;
+    callback toggled(bool);
+
+    width: 40px;
+    height: 22px;
+    accessible-role: switch;
+    accessible-checked: root.checked;
+    accessible-label: root.name;
+    accessible-action-default => { root.toggled(!root.checked); }
+
+    Rectangle {
+        border-radius: self.height / 2;
+        background: root.checked ? Theme.accent : Theme.track;
+        opacity: root.enabled ? 1 : 0.4;
+        animate background { duration: 120ms; }
+
+        Rectangle {
+            width: 16px;
+            height: 16px;
+            y: 3px;
+            x: root.checked ? parent.width - self.width - 3px : 3px;
+            border-radius: 8px;
+            background: root.checked ? #ffffff : #7d838c;
+            animate x { duration: 120ms; }
+        }
+    }
+
+    TouchArea {
+        enabled: root.enabled;
+        mouse-cursor: pointer;
+        clicked => { root.toggled(!root.checked); }
+    }
+}
+
+// A horizontal slider with end labels and Swarm's purple-to-pink fill. While dragging it shows the dragged value;
+// `released` reports it once the button is let go. With `centred`, the fill starts at the middle (AMB-ANC).
+export component GradientSlider {
+    in property <int> value;
+    in property <int> minimum: 0;
+    in property <int> maximum: 100;
+    in property <string> min-label: root.minimum;
+    in property <string> max-label: root.maximum;
+    in property <bool> centred;
+    in property <bool> enabled: true;
+    // shows the value without a knob and cannot be moved
+    in property <bool> read-only;
+    in property <string> name;
+    callback released(int);
+
+    private property <int> dragged;
+    private property <int> shown: touch.pressed ? root.dragged : root.value;
+    private property <float> ratio: Math.clamp((root.shown - root.minimum) / (root.maximum - root.minimum), 0, 1);
+
+    min-height: 24px;
+    accessible-role: slider;
+    accessible-label: root.name;
+    accessible-value: root.shown;
+    accessible-value-minimum: root.minimum;
+    accessible-value-maximum: root.maximum;
+    accessible-value-step: 1;
+    accessible-action-increment => { root.released(Math.min(root.value + 5, root.maximum)); }
+    accessible-action-decrement => { root.released(Math.max(root.value - 5, root.minimum)); }
+
+    function value-at(x: length) -> int {
+        return Math.clamp(Math.round(root.minimum + (root.maximum - root.minimum) * (x - 8px) / (track.width - 16px)), root.minimum, root.maximum);
+    }
+
+    HorizontalLayout {
+        spacing: 12px;
+        opacity: root.enabled ? 1 : 0.4;
+
+        Text {
+            text: root.min-label;
+            color: Theme.muted;
+            font-size: Theme.label-size;
+            vertical-alignment: center;
+            horizontal-alignment: right;
+            min-width: 28px;
+        }
+
+        track := Rectangle {
+            horizontal-stretch: 1;
+            private property <length> run: self.width - 16px;
+
+            Rectangle {
+                x: 8px;
+                width: track.run;
+                y: (parent.height - self.height) / 2;
+                height: 2px;
+                background: Theme.track;
+            }
+            Rectangle {
+                x: 8px + (root.centred ? Math.min(root.ratio, 0.5) : 0) * track.run;
+                width: (root.centred ? Math.abs(root.ratio - 0.5) : root.ratio) * track.run;
+                y: (parent.height - self.height) / 2;
+                height: 2px;
+                background: Theme.fill;
+            }
+            if root.centred: Rectangle {
+                x: 8px + track.run / 2;
+                width: 1px;
+                y: (parent.height - self.height) / 2;
+                height: 14px;
+                background: Theme.dim;
+            }
+            if !root.read-only: Rectangle {
+                x: 8px + root.ratio * track.run - self.width / 2;
+                y: (parent.height - self.height) / 2;
+                width: 16px;
+                height: 16px;
+                border-radius: 8px;
+                background: #ffffff;
+            }
+
+            touch := TouchArea {
+                enabled: root.enabled && !root.read-only;
+                mouse-cursor: self.enabled ? pointer : default;
+                pointer-event(event) => {
+                    if (event.button == PointerEventButton.left && event.kind == PointerEventKind.down) {
+                        root.dragged = root.value-at(self.mouse-x);
+                    } else if (event.button == PointerEventButton.left && event.kind == PointerEventKind.up) {
+                        root.released(root.dragged);
+                    }
+                }
+                moved => { root.dragged = root.value-at(self.mouse-x); }
+            }
+        }
+
+        Text {
+            text: root.max-label;
+            color: Theme.muted;
+            font-size: Theme.label-size;
+            vertical-alignment: center;
+            min-width: 28px;
+        }
+    }
+}
+
+// A closed list that opens downwards. `current` is the value of the shown choice.
+export component Dropdown {
+    in property <[Choice]> choices;
+    in property <int> current;
+    in property <bool> enabled: true;
+    in property <string> name;
+    callback selected(int);
+
+    min-width: 170px;
+    height: 34px;
+    accessible-role: combobox;
+    accessible-label: root.name;
+
+    Rectangle {
+        background: area.has-hover && root.enabled ? Theme.hover : Theme.field;
+        border-radius: 4px;
+        opacity: root.enabled ? 1 : 0.4;
+
+        for choice in root.choices: Text {
+            x: 12px;
+            visible: choice.value == root.current;
+            text: choice.label;
+            color: Theme.text;
+            font-size: Theme.label-size;
+            vertical-alignment: center;
+            height: parent.height;
+            width: parent.width - 40px;
+            overflow: elide;
+        }
+        Path {
+            x: parent.width - 24px;
+            y: (parent.height - self.height) / 2;
+            width: 10px;
+            height: 6px;
+            commands: "M 0 0 L 5 5 L 10 0";
+            stroke: Theme.muted;
+            stroke-width: 1.5px;
+        }
+    }
+
+    area := TouchArea {
+        enabled: root.enabled;
+        mouse-cursor: pointer;
+        clicked => { popup.show(); }
+    }
+
+    popup := PopupWindow {
+        x: 0;
+        y: root.height + 4px;
+        width: root.width;
+
+        Rectangle {
+            background: Theme.popup;
+            border-radius: 4px;
+            drop-shadow-blur: 12px;
+            drop-shadow-color: #00000080;
+        }
+        VerticalLayout {
+            padding: 4px;
+            for choice in root.choices: Rectangle {
+                height: 34px;
+                border-radius: 3px;
+                background: item.has-hover ? Theme.hover : transparent;
+                Text {
+                    x: 10px;
+                    width: parent.width - 20px;
+                    text: choice.label;
+                    color: choice.value == root.current ? Theme.selected : Theme.text;
+                    font-size: Theme.label-size;
+                    vertical-alignment: center;
+                    overflow: elide;
+                }
+                item := TouchArea {
+                    mouse-cursor: pointer;
+                    clicked => {
+                        root.selected(choice.value);
+                        popup.close();
+                    }
+                }
+            }
+        }
+    }
+}
+
+// Two or more side-by-side buttons, one of them chosen (Swarm's Off / On).
+export component Segmented {
+    in property <[string]> options;
+    in property <int> current;
+    in property <bool> enabled: true;
+    in property <string> name;
+    callback selected(int);
+
+    min-width: 240px;
+    height: 36px;
+    accessible-role: tab-list;
+    accessible-label: root.name;
+
+    Rectangle {
+        background: Theme.field;
+        border-radius: 4px;
+        opacity: root.enabled ? 1 : 0.4;
+    }
+    HorizontalLayout {
+        padding: 3px;
+        spacing: 3px;
+        for option[i] in root.options: Rectangle {
+            border-radius: 3px;
+            background: i == root.current ? #313844 : (segment.has-hover && root.enabled ? Theme.hover : transparent);
+            accessible-role: tab;
+            accessible-label: option;
+            accessible-checked: i == root.current;
+            Text {
+                text: option;
+                color: i == root.current ? Theme.text : Theme.muted;
+                font-size: Theme.label-size;
+                horizontal-alignment: center;
+                vertical-alignment: center;
+            }
+            segment := TouchArea {
+                enabled: root.enabled;
+                mouse-cursor: pointer;
+                clicked => { root.selected(i); }
+            }
+        }
+    }
+}
+
+// A list of choices, the current one in teal (Swarm's function and preset lists).
+export component OptionList {
+    in property <[Choice]> choices;
+    in property <int> current;
+    in property <bool> enabled: true;
+    callback selected(int);
+
+    VerticalLayout {
+        spacing: 2px;
+        for choice in root.choices: Rectangle {
+            height: 40px;
+            border-radius: 4px;
+            background: row.has-hover && root.enabled ? Theme.hover : transparent;
+            accessible-role: list-item;
+            accessible-label: choice.label;
+            accessible-checked: choice.value == root.current;
+            HorizontalLayout {
+                padding-left: 12px;
+                padding-right: 12px;
+                spacing: 12px;
+                Rectangle {
+                    width: 8px;
+                    height: 8px;
+                    y: (parent.height - self.height) / 2;
+                    border-radius: 4px;
+                    background: choice.value == root.current ? Theme.selected : transparent;
+                    border-width: 1px;
+                    border-color: choice.value == root.current ? Theme.selected : Theme.dim;
+                }
+                Text {
+                    text: choice.label.to-uppercase();
+                    color: choice.value == root.current ? Theme.selected : (root.enabled ? Theme.text : Theme.dim);
+                    font-size: Theme.label-size;
+                    letter-spacing: 0.5px;
+                    vertical-alignment: center;
+                    overflow: elide;
+                    horizontal-stretch: 1;
+                }
+            }
+            row := TouchArea {
+                enabled: root.enabled;
+                mouse-cursor: pointer;
+                clicked => { root.selected(choice.value); }
+            }
+        }
+    }
+}
+
+// Text tabs with a gradient underline under the current one (Swarm's GAME / MIC).
+export component Tabs {
+    in property <[string]> titles;
+    in-out property <int> current;
+
+    HorizontalLayout {
+        spacing: 24px;
+        alignment: center;
+        for title[i] in root.titles: VerticalLayout {
+            spacing: 6px;
+            accessible-role: tab;
+            accessible-label: title;
+            accessible-checked: i == root.current;
+            Text {
+                text: title.to-uppercase();
+                color: i == root.current ? Theme.text : Theme.muted;
+                font-size: Theme.label-size;
+                letter-spacing: 1px;
+                horizontal-alignment: center;
+                TouchArea {
+                    mouse-cursor: pointer;
+                    clicked => { root.current = i; }
+                }
+            }
+            Rectangle {
+                height: 2px;
+                background: i == root.current ? Theme.fill : transparent;
+            }
+        }
+    }
+}
+
+// A rounded outline button with a label, Swarm's "Save as new preset".
+export component OutlineButton {
+    in property <string> text;
+    in property <bool> enabled: true;
+    in property <bool> primary;
+    callback clicked();
+
+    height: 36px;
+    min-width: label.preferred-width + 40px;
+    accessible-role: button;
+    accessible-label: root.text;
+    accessible-action-default => { root.clicked(); }
+
+    Rectangle {
+        border-radius: self.height / 2;
+        border-width: 1px;
+        border-color: root.enabled ? (root.primary ? Theme.accent : #4a515c) : Theme.line;
+        background: root.primary && root.enabled ? Theme.accent : (press.has-hover && root.enabled ? Theme.hover : transparent);
+    }
+    label := Text {
+        text: root.text;
+        color: root.enabled ? Theme.text : Theme.dim;
+        font-size: Theme.label-size;
+        horizontal-alignment: center;
+        vertical-alignment: center;
+    }
+    press := TouchArea {
+        enabled: root.enabled;
+        mouse-cursor: pointer;
+        clicked => { root.clicked(); }
+    }
+}

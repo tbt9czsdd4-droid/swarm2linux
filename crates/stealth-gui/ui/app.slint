@@ -1,33 +1,71 @@
+import { ScrollView } from "std-widgets.slint";
+import { Theme } from "theme.slint";
 import { Headset, Choice } from "state.slint";
+import { Rail, Header, Banner, Overlay, Toast, Page } from "shell.slint";
+import { SettingsPage } from "pages/settings.slint";
 
 export { Headset, Choice }
 
 export component AppWindow inherits Window {
+    in-out property <int> page;
+
+    private property <[Page]> pages: [
+        { title: "Settings", icon: @image-url("icons/headphones.svg") },
+        { title: "Equalizer", icon: @image-url("icons/equalizer.svg") },
+        { title: "Controls", icon: @image-url("icons/controls.svg") },
+        { title: "Device", icon: @image-url("icons/device.svg") },
+    ];
+    private property <string> problem: !Headset.connected
+        ? "No transmitter found. Plug in the USB transmitter or the headset's cable."
+        : "The headset is off or out of range. Settings show their last known values until it reconnects.";
+
     title: "swarm2linux";
     preferred-width: 1200px;
-    preferred-height: 780px;
-    min-width: 900px;
+    preferred-height: 800px;
+    min-width: 960px;
     min-height: 640px;
-    background: #111419;
+    background: Theme.background;
+    default-font-size: Theme.label-size;
 
-    VerticalLayout {
-        padding: 24px;
-        spacing: 8px;
-        alignment: start;
-        for line in [
-            "stealthd: " + (Headset.daemon-running ? "running" : "not running"),
-            "device: " + (Headset.connected ? Headset.device : "none"),
-            "headset link: " + (Headset.headset-link ? "up" : "down"),
-            "name: " + Headset.name,
-            "battery: " + (Headset.battery < 0 ? "unknown" : Headset.battery + "%") + (Headset.charging ? " (charging)" : ""),
-            "firmware: " + Headset.firmware,
-            "ANC: " + (Headset.anc ? "on" : "off") + ", level " + Headset.anc-level,
-            "game EQ preset: " + Headset.game-eq-preset + " " + Headset.game-eq-name,
-            "error: " + Headset.error,
-        ]: Text {
-            text: line;
-            color: #e8eaed;
-            font-size: 15px;
+    HorizontalLayout {
+        Rail {
+            pages: root.pages;
+            current <=> root.page;
         }
+
+        VerticalLayout {
+            Header {
+                subtitle: root.pages[root.page].title;
+            }
+
+            if Headset.daemon-running && !Headset.available: HorizontalLayout {
+                padding-left: 32px;
+                padding-right: 32px;
+                padding-bottom: 12px;
+                Banner { text: root.problem; }
+            }
+
+            ScrollView {
+                vertical-stretch: 1;
+                VerticalLayout {
+                    alignment: start;
+                    padding-left: 32px;
+                    padding-right: 32px;
+                    padding-bottom: 32px;
+                    if root.page == 0: SettingsPage { }
+                    if root.page != 0: Text {
+                        text: "Coming soon";
+                        color: Theme.muted;
+                    }
+                }
+            }
+        }
+    }
+
+    if !Headset.daemon-running: Overlay { }
+
+    Toast {
+        x: (parent.width - self.width) / 2;
+        y: parent.height - self.height - 24px;
     }
 }

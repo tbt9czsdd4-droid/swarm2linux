@@ -1,0 +1,208 @@
+// Swarm's "Settings" page: the Audio and Microphone cards.
+
+import { Theme } from "../theme.slint";
+import { Headset } from "../state.slint";
+import { Card, Label, Hint, Toggle, GradientSlider, Dropdown, Segmented } from "../widgets/controls.slint";
+
+// A setting name with its control on the right, and an optional slider underneath.
+component Setting inherits VerticalLayout {
+    in property <string> label;
+    spacing: 12px;
+    HorizontalLayout {
+        spacing: 16px;
+        min-height: 34px;
+        Label { text: root.label.to-uppercase(); }
+        @children
+    }
+}
+
+component AudioCard inherits Card {
+    title: "Audio";
+
+    VerticalLayout {
+        spacing: 12px;
+        HorizontalLayout {
+            min-height: 34px;
+            Label { text: "MASTER VOLUME"; }
+            Text {
+                text: Headset.volume;
+                color: Theme.muted;
+                font-size: Theme.label-size;
+                vertical-alignment: center;
+            }
+        }
+        GradientSlider {
+            value: Headset.volume;
+            read-only: true;
+            enabled: Headset.available;
+            name: "Master volume";
+        }
+        Hint { text: "Turn the volume wheel on the left earcup to change it."; }
+    }
+
+    VerticalLayout {
+        spacing: 12px;
+        Setting {
+            label: "Superhuman Hearing";
+            Dropdown {
+                name: "Superhuman Hearing mode";
+                choices: Headset.superhuman-modes;
+                current: Headset.superhuman-mode;
+                enabled: Headset.available && Headset.superhuman;
+                selected(v) => {
+                    Headset.superhuman-mode = v;
+                    Headset.set-int("superhuman_mode", v);
+                }
+            }
+            Toggle {
+                name: "Superhuman Hearing";
+                y: (parent.height - self.height) / 2;
+                checked: Headset.superhuman;
+                enabled: Headset.available;
+                toggled(on) => {
+                    Headset.superhuman = on;
+                    Headset.set-bool("superhuman", on);
+                }
+            }
+        }
+        GradientSlider {
+            name: "Superhuman Hearing level";
+            value: Headset.superhuman-level;
+            enabled: Headset.available && Headset.superhuman;
+            released(v) => {
+                Headset.superhuman-level = v;
+                Headset.set-int("superhuman_level", v);
+            }
+        }
+    }
+
+    VerticalLayout {
+        spacing: 12px;
+        Setting {
+            label: "Active noise cancellation";
+            Toggle {
+                name: "Active noise cancellation";
+                y: (parent.height - self.height) / 2;
+                checked: Headset.anc;
+                enabled: Headset.available;
+                toggled(on) => {
+                    Headset.anc = on;
+                    Headset.set-bool("anc", on);
+                }
+            }
+        }
+        GradientSlider {
+            name: "Ambient to noise cancellation";
+            value: Headset.anc-level;
+            min-label: "AMB";
+            max-label: "ANC";
+            centred: true;
+            enabled: Headset.available;
+            released(v) => {
+                Headset.anc-level = v;
+                Headset.set-int("anc_level", v);
+            }
+        }
+        Hint { text: "Towards AMB lets surrounding sound in, towards ANC blocks it."; }
+    }
+}
+
+component MicrophoneCard inherits Card {
+    title: "Microphone";
+
+    VerticalLayout {
+        spacing: 12px;
+        Setting {
+            label: "Microphone";
+            Rectangle {
+                width: 84px;
+                height: 26px;
+                y: (parent.height - self.height) / 2;
+                border-radius: 13px;
+                background: Headset.mic-muted ? #3a1d22 : #16302a;
+                Text {
+                    text: Headset.mic-muted ? "Muted" : "Live";
+                    color: Headset.mic-muted ? Theme.bad : Theme.good;
+                    font-size: Theme.small-size;
+                    horizontal-alignment: center;
+                    vertical-alignment: center;
+                }
+            }
+        }
+        Hint { text: "Flip the microphone up to mute it, down to talk."; }
+    }
+
+    VerticalLayout {
+        spacing: 12px;
+        Label { text: "SENSITIVITY"; }
+        GradientSlider {
+            name: "Microphone sensitivity";
+            value: Headset.mic-sensitivity;
+            enabled: Headset.available;
+            released(v) => {
+                Headset.mic-sensitivity = v;
+                Headset.set-int("mic_sensitivity", v);
+            }
+        }
+    }
+
+    VerticalLayout {
+        spacing: 12px;
+        Label { text: "MONITORING"; }
+        GradientSlider {
+            name: "Microphone monitoring";
+            value: Headset.monitoring-level;
+            enabled: Headset.available;
+            released(v) => {
+                Headset.monitoring-level = v;
+                Headset.set-int("monitoring_level", v);
+            }
+        }
+    }
+
+    VerticalLayout {
+        spacing: 12px;
+        Setting {
+            label: "Noise gate";
+            Toggle {
+                name: "Noise gate";
+                y: (parent.height - self.height) / 2;
+                checked: Headset.noise-gate;
+                enabled: Headset.available;
+                toggled(on) => {
+                    Headset.noise-gate = on;
+                    Headset.set-bool("noise_gate", on);
+                }
+            }
+        }
+        GradientSlider {
+            name: "Noise gate level";
+            value: Headset.noise-gate-level;
+            enabled: Headset.available;
+            released(v) => {
+                Headset.noise-gate-level = v;
+                Headset.set-int("noise_gate_level", v);
+            }
+        }
+    }
+
+    Setting {
+        label: "AI noise reduction";
+        Segmented {
+            name: "AI noise reduction";
+            options: ["Off", "On"];
+            current: Headset.ai-noise-reduction ? 1 : 0;
+            enabled: Headset.available;
+            selected(i) => {
+                Headset.ai-noise-reduction = i == 1;
+                Headset.set-bool("ai_noise_reduction", i == 1);
+            }
+        }
+    }
+}
+
+export component SettingsPage inherits HorizontalLayout {
+    spacing: 24px;
+    AudioCard { horizontal-stretch: 1; }
+    MicrophoneCard { horizontal-stretch: 1; }
+}
