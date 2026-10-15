@@ -214,7 +214,7 @@ Matched with the order of the round-1 writes:
 |-----|------|-----------|---------|
 | a00 | `1` | | |
 | a10 | `2` | | |
-| a20 | `1` | ✎ 2, 3, 4, 5, 1 | function of the assignable wheel on the left earcup **[ui, capture]**: `1` mic monitoring volume (default), `2` game and chat mix, `3` bass boost level, `4` treble boost level, `5` noise gate volume |
+| a20 | `1` | ✎ 2, 3, 4, 5, 1 | function of the second wheel on the left earcup (the other one is the volume wheel, `2a0`; the right earcup's wheel is Bluetooth volume) **[ui, user, capture]**: `1` mic monitoring volume (default), `2` game and chat mix, `3` bass boost level, `4` treble boost level, `5` noise gate volume |
 | a30 | `50` | | **[guess]** game/chat mix position |
 
 #### `Btn`: buttons
@@ -279,14 +279,12 @@ Derived the same way, from pushes in the order 1 → 2 → 3 → 4 (seen twice, 
    not be the headset, while the headset changes its own volume (`2a0`) as well.
 1. Not captured: the "Audio master volume" toggle (`Master_Volume_Enable`, also the "volume mute" hotkey) and
    monitoring enable (`640`?). Both duplicate other controls (system mute, monitoring level 0).
-2. Which physical wheel `Enc.a20` assigns: Swarm II's drawing highlights a second wheel on the left earcup, apart
-   from the volume wheel (`2a0`).
-3. Unknown keys: `GSI` 200, 210, 260, 270, 2b0, 2c0, 2d0; `Mic` 650; `Enc` a00, a10, a30; `Btn` b00, b10;
+2. Unknown keys: `GSI` 200, 210, 260, 270, 2b0, 2c0, 2d0; `Mic` 650; `Enc` a00, a10, a30; `Btn` b00, b10;
    `BT` 300–350; `3DT` 500–530
    (the device module also has settings for Waves 3D, chat boost and game/chat mix, which this headset's pages do not
    show).
-4. How are writes longer than one report sent? (None seen so far; preset names keep requests short.)
-5. Does `target = 80` reach the headset directly?
+3. How are writes longer than one report sent? (None seen so far; preset names keep requests short.)
+4. Does `target = 80` reach the headset directly?
 
 ## Sources
 
