@@ -40,6 +40,8 @@ export component Hint inherits Text {
     color: Theme.muted;
     font-size: Theme.small-size;
     wrap: word-wrap;
+    // wrapped text should not ask for the width of its single-line form
+    preferred-width: 0;
 }
 
 export component Toggle {
@@ -179,6 +181,53 @@ export component GradientSlider {
             font-size: Theme.label-size;
             vertical-alignment: center;
             min-width: 28px;
+        }
+    }
+}
+
+// The label of the current choice.
+export component ChoiceLabel {
+    in property <[Choice]> choices;
+    in property <int> current;
+    in property <color> color: Theme.text;
+    in property <length> font-size: Theme.label-size;
+
+    min-height: 18px;
+    for choice in root.choices: Text {
+        visible: choice.value == root.current;
+        width: parent.width;
+        height: parent.height;
+        text: choice.label;
+        color: root.color;
+        font-size: root.font-size;
+        vertical-alignment: center;
+        overflow: elide;
+    }
+}
+
+// A label and a value on one line, Swarm's device status rows.
+export component InfoRow {
+    in property <string> label;
+    in property <string> value;
+
+    min-height: 30px;
+    HorizontalLayout {
+        spacing: 16px;
+        Text {
+            text: root.label.to-uppercase();
+            color: Theme.muted;
+            font-size: Theme.small-size;
+            letter-spacing: 0.5px;
+            vertical-alignment: center;
+        }
+        Text {
+            text: root.value;
+            color: Theme.text;
+            font-size: Theme.label-size;
+            horizontal-alignment: right;
+            vertical-alignment: center;
+            overflow: elide;
+            horizontal-stretch: 1;
         }
     }
 }

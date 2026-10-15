@@ -1,0 +1,241 @@
+// Swarm's device cards: status, power options, charging hub and notifications, plus an About card.
+
+import { AboutSlint } from "std-widgets.slint";
+import { Theme } from "../theme.slint";
+import { Headset, Prefs, About } from "../state.slint";
+import { Card, Label, Hint, Toggle, GradientSlider, Dropdown, InfoRow } from "../widgets/controls.slint";
+
+// A setting name with its control on the right.
+component Setting inherits HorizontalLayout {
+    in property <string> label;
+    spacing: 16px;
+    min-height: 34px;
+    Label { text: root.label.to-uppercase(); }
+    @children
+}
+
+component StatusCard inherits Card {
+    title: "Device status";
+
+    VerticalLayout {
+        spacing: 10px;
+        HorizontalLayout {
+            Text {
+                text: "BATTERY";
+                color: Theme.muted;
+                font-size: Theme.small-size;
+                letter-spacing: 0.5px;
+                vertical-alignment: center;
+            }
+            Text {
+                text: Headset.battery < 0 ? "unknown" : Headset.battery + "%" + (Headset.charging ? ", charging" : "");
+                color: Theme.text;
+                font-size: Theme.label-size;
+                horizontal-alignment: right;
+                horizontal-stretch: 1;
+            }
+        }
+        Rectangle {
+            height: 4px;
+            border-radius: 2px;
+            background: Theme.track;
+            Rectangle {
+                x: 0;
+                width: Headset.battery < 0 ? 0 : parent.width * Headset.battery / 100;
+                border-radius: 2px;
+                background: Headset.battery >= 0 && Headset.battery <= 15 && !Headset.charging ? Theme.bad : Theme.good;
+            }
+        }
+    }
+
+    VerticalLayout {
+        InfoRow {
+            label: "Transmitter";
+            value: Headset.connected ? Headset.device : "not found";
+        }
+        InfoRow {
+            label: "Headset";
+            value: !Headset.connected ? "–" : (Headset.headset-link ? "connected" : "off or out of range");
+        }
+        InfoRow {
+            label: "Name";
+            value: Headset.name;
+        }
+        InfoRow {
+            label: "Firmware";
+            value: Headset.firmware;
+        }
+    }
+
+    if Headset.transmitters.length > 0: VerticalLayout {
+        spacing: 4px;
+        Text {
+            text: "CROSSPLAY";
+            color: Theme.muted;
+            font-size: Theme.small-size;
+            letter-spacing: 1px;
+        }
+        for line in Headset.transmitters: Text {
+            text: line;
+            color: Theme.text;
+            font-size: Theme.label-size;
+        }
+    }
+}
+
+component PowerCard inherits Card {
+    title: "Power options";
+
+    Setting {
+        label: "Auto shut-off";
+        Dropdown {
+            name: "Auto shut-off";
+            choices: Headset.auto-shutoff-options;
+            current: Headset.auto-shutoff;
+            enabled: Headset.available;
+            selected(v) => {
+                Headset.auto-shutoff = v;
+                Headset.set-int("auto_shutoff", v);
+            }
+        }
+    }
+    Setting {
+        label: "Wake on motion";
+        Toggle {
+            name: "Wake on motion";
+            y: (parent.height - self.height) / 2;
+            checked: Headset.wake-on-motion;
+            enabled: Headset.available;
+            toggled(on) => {
+                Headset.wake-on-motion = on;
+                Headset.set-bool("wake_on_motion", on);
+            }
+        }
+    }
+}
+
+component HubCard inherits Card {
+    title: "Charging hub";
+
+    Setting {
+        label: "Status";
+        HorizontalLayout {
+            spacing: 8px;
+            Rectangle {
+                width: 8px;
+                height: 8px;
+                y: (parent.height - self.height) / 2;
+                border-radius: 4px;
+                background: Headset.hub-status == "Active" ? Theme.good : (Headset.hub-status == "Standby" ? Theme.warn : Theme.dim);
+            }
+            Text {
+                text: Headset.hub-status;
+                color: Theme.text;
+                font-size: Theme.label-size;
+                vertical-alignment: center;
+            }
+        }
+    }
+    VerticalLayout {
+        spacing: 12px;
+        Label { text: "LED 1"; }
+        GradientSlider {
+            name: "Charging hub LED 1";
+            value: Headset.hub-led-1;
+            enabled: Headset.available;
+            released(v) => {
+                Headset.hub-led-1 = v;
+                Headset.set-int("hub_led_1", v);
+            }
+        }
+    }
+    VerticalLayout {
+        spacing: 12px;
+        Label { text: "LED 2"; }
+        GradientSlider {
+            name: "Charging hub LED 2";
+            value: Headset.hub-led-2;
+            enabled: Headset.available;
+            released(v) => {
+                Headset.hub-led-2 = v;
+                Headset.set-int("hub_led_2", v);
+            }
+        }
+    }
+}
+
+component NotificationsCard inherits Card {
+    title: "Notifications";
+
+    VerticalLayout {
+        spacing: 8px;
+        Setting {
+            label: "Battery pop-ups";
+            Toggle {
+                name: "Battery pop-ups";
+                y: (parent.height - self.height) / 2;
+                checked: Headset.battery-notifications;
+                enabled: Headset.daemon-running;
+                toggled(on) => {
+                    Headset.battery-notifications = on;
+                    Headset.set-battery-notifications(on);
+                }
+            }
+        }
+        Hint { text: "stealthd warns at 15% and 5% while the headset is not charging."; }
+    }
+    VerticalLayout {
+        spacing: 8px;
+        Setting {
+            label: "Battery in the tray";
+            Toggle {
+                name: "Battery in the tray";
+                y: (parent.height - self.height) / 2;
+                checked: Prefs.tray;
+                toggled(on) => {
+                    Prefs.tray = on;
+                    Prefs.changed();
+                }
+            }
+        }
+        Hint { text: "Shows the battery level in the system tray. Closing the window keeps the app there."; }
+    }
+}
+
+component AboutCard inherits Card {
+    title: "About";
+
+    Text {
+        text: "swarm2linux " + About.version;
+        color: Theme.text;
+        font-size: Theme.label-size;
+    }
+    Hint {
+        text: "An unofficial Linux app for the Turtle Beach Stealth Pro II, not affiliated with Turtle Beach. github.com/tbt9czsdd4-droid/swarm2linux";
+    }
+    HorizontalLayout {
+        alignment: start;
+        AboutSlint { }
+    }
+}
+
+export component DevicePage inherits HorizontalLayout {
+    spacing: 24px;
+    alignment: stretch;
+
+    VerticalLayout {
+        horizontal-stretch: 1;
+        spacing: 24px;
+        alignment: start;
+        StatusCard { }
+        PowerCard { }
+    }
+    VerticalLayout {
+        horizontal-stretch: 1;
+        spacing: 24px;
+        alignment: start;
+        HubCard { }
+        NotificationsCard { }
+        AboutCard { }
+    }
+}

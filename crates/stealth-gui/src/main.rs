@@ -24,6 +24,7 @@ fn main() -> Result<()> {
     let ui = AppWindow::new()?;
     let headset = ui.global::<Headset>();
     model::init(&headset);
+    ui.global::<About>().set_version(env!("CARGO_PKG_VERSION").into());
 
     let bridge = bridge::start(ui.as_weak())?;
     let b = bridge.clone();
@@ -34,6 +35,8 @@ fn main() -> Result<()> {
     headset.on_set_band(move |eq, band, tenths| b.send(Command::SetBand(eq.into(), band as u32, tenths)));
     let b = bridge.clone();
     headset.on_save_preset(move |eq, name| b.send(Command::SavePreset(eq.into(), name.into())));
+    let b = bridge.clone();
+    headset.on_set_battery_notifications(move |on| b.send(Command::BatteryNotifications(on)));
     let b = bridge.clone();
     headset.on_delete_preset(move |eq, name| b.send(Command::DeletePreset(eq.into(), name.into())));
     let weak = ui.as_weak();

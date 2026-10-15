@@ -10,6 +10,7 @@
 //! - `SavePreset(s eq, s name)`, `DeletePreset(s eq, s name)`: custom EQ presets
 //! - signal `Changed(a{sv})`: the values that changed
 //! - property `Connected` (b)
+//! - property `BatteryNotifications` (b, writable): whether stealthd warns about a low battery
 //!
 //! Besides the names of `tb_proto::values::NAMES`, `Values` and `Changed` carry [`DAEMON_NAMES`].
 
@@ -17,6 +18,7 @@ use std::collections::{BTreeMap, HashMap};
 
 use tb_proto::values::Typed;
 use zbus::blocking::{Connection, Proxy};
+use zbus::proxy::CacheProperties;
 use zbus::zvariant::{OwnedValue, Value};
 
 pub const BUS_NAME: &str = "io.github.swarm2linux.Stealthd";
@@ -82,7 +84,12 @@ impl DaemonClient {
     /// arriving once it is.
     pub fn new() -> zbus::Result<Self> {
         let conn = Connection::session()?;
-        let proxy = Proxy::new_owned(conn, BUS_NAME, PATH, INTERFACE)?;
+        let proxy = zbus::blocking::proxy::Builder::new(&conn)
+            .destination(BUS_NAME)?
+            .path(PATH)?
+            .interface(INTERFACE)?
+            .cache_properties(CacheProperties::No)
+            .build()?;
         Ok(Self { proxy })
     }
 
@@ -123,6 +130,15 @@ impl DaemonClient {
 
     pub fn delete_preset(&self, eq: &str, name: &str) -> zbus::Result<()> {
         self.proxy.call::<_, _, ()>("DeletePreset", &(eq, name))
+    }
+
+    /// Whether stealthd warns about a low battery.
+    pub fn battery_notifications(&self) -> zbus::Result<bool> {
+        self.proxy.get_property("BatteryNotifications")
+    }
+
+    pub fn set_battery_notifications(&self, on: bool) -> zbus::Result<()> {
+        self.proxy.set_property("BatteryNotifications", on).map_err(Into::into)
     }
 
     /// The `Changed` signals, as they arrive (blocks between signals).

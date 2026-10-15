@@ -1,0 +1,205 @@
+// Swarm's "Assignment" page: what the mode button and the assignable wheel on the left earcup do.
+
+import { Theme } from "../theme.slint";
+import { Headset, Choice } from "../state.slint";
+import { Card, Hint, OptionList, ChoiceLabel } from "../widgets/controls.slint";
+
+// One control on the earcup drawing, with a leader line to its name and what it does.
+component Part {
+    in property <string> title;
+    in property <string> function;
+    in property <[Choice]> choices;
+    in property <int> current: -1;
+    in property <length> part-width;
+    in property <length> part-height;
+    in property <bool> ribbed;
+    in property <bool> round;
+    in property <bool> selectable;
+    in property <bool> selected;
+    // where the labels start, measured from this part's left edge
+    in property <length> label-x;
+    callback clicked();
+
+    height: Math.max(self.part-height, 40px);
+    accessible-role: button;
+    accessible-label: root.title;
+    accessible-action-default => { root.clicked(); }
+
+    private property <bool> lit: root.selected || (area.has-hover && root.selectable);
+
+    Rectangle {
+        x: 0;
+        y: (parent.height - self.height) / 2;
+        width: root.part-width;
+        height: root.part-height;
+        border-radius: root.round ? self.width / 2 : 6px;
+        border-width: root.selected ? 2px : 1.5px;
+        border-color: root.selected ? Theme.selected : (root.lit ? Theme.text : (root.selectable ? #8d949e : #4a515c));
+        background: root.selected ? #173a35 : #1a1f27;
+
+        if root.ribbed: Rectangle {
+            for k in 7: Rectangle {
+                x: 5px;
+                width: parent.width - 10px;
+                y: 7px + k * (parent.height - 14px) / 6;
+                height: 1px;
+                background: root.selected ? Theme.selected : #4a515c;
+            }
+        }
+    }
+
+    Rectangle {
+        x: root.part-width + 8px;
+        y: parent.height / 2;
+        width: root.label-x - root.part-width - 16px;
+        height: 1px;
+        background: root.lit ? #4a515c : Theme.line;
+    }
+
+    VerticalLayout {
+        x: root.label-x;
+        width: Math.max(root.width - root.label-x, 120px);
+        alignment: center;
+        spacing: 2px;
+        Text {
+            text: root.title.to-uppercase();
+            color: root.selected ? Theme.selected : (root.selectable ? Theme.text : Theme.muted);
+            font-size: Theme.label-size;
+            letter-spacing: 0.5px;
+        }
+        if root.current >= 0: ChoiceLabel {
+            choices: root.choices;
+            current: root.current;
+            color: Theme.muted;
+            font-size: Theme.small-size;
+        }
+        if root.current < 0: Text {
+            text: root.function;
+            color: Theme.dim;
+            font-size: Theme.small-size;
+            wrap: word-wrap;
+        }
+    }
+
+    area := TouchArea {
+        enabled: root.selectable;
+        mouse-cursor: self.enabled ? pointer : default;
+        clicked => { root.clicked(); }
+    }
+}
+
+// The left earcup's rear edge from the top, drawn as a rounded strip with its controls.
+component Earcup {
+    in-out property <int> control;
+
+    private property <length> strip-x: 40px;
+    private property <length> strip-w: 84px;
+    private property <length> label-at: root.strip-x + root.strip-w + 48px;
+
+    min-height: 460px;
+
+    Rectangle {
+        x: root.strip-x;
+        y: 0;
+        width: root.strip-w;
+        height: root.height;
+        border-radius: root.strip-w / 2;
+        border-width: 1.5px;
+        border-color: #3a404a;
+        background: #15191f;
+    }
+
+    Part {
+        x: root.strip-x + (root.strip-w - self.part-width) / 2;
+        width: root.width - self.x;
+        y: 40px;
+        part-width: 34px;
+        part-height: 34px;
+        label-x: root.label-at - self.x;
+        title: "Mode button";
+        choices: Headset.button-functions;
+        current: Headset.button-function;
+        selectable: true;
+        selected: root.control == 0;
+        clicked => { root.control = 0; }
+    }
+    Part {
+        x: root.strip-x + (root.strip-w - self.part-width) / 2;
+        width: root.width - self.x;
+        y: 100px;
+        part-width: 28px;
+        part-height: 64px;
+        ribbed: true;
+        label-x: root.label-at - self.x;
+        title: "Volume wheel";
+        function: "Master volume";
+    }
+    Part {
+        x: root.strip-x + (root.strip-w - self.part-width) / 2;
+        width: root.width - self.x;
+        y: 190px;
+        part-width: 38px;
+        part-height: 92px;
+        ribbed: true;
+        label-x: root.label-at - self.x;
+        title: "Assignable wheel";
+        choices: Headset.wheel-functions;
+        current: Headset.wheel-function;
+        selectable: true;
+        selected: root.control == 1;
+        clicked => { root.control = 1; }
+    }
+    Part {
+        x: root.strip-x + (root.strip-w - self.part-width) / 2;
+        width: root.width - self.x;
+        y: 312px;
+        part-width: 12px;
+        part-height: 34px;
+        label-x: root.label-at - self.x;
+        title: "USB-C";
+        function: "Charging and wired audio";
+    }
+    Part {
+        x: root.strip-x + (root.strip-w - self.part-width) / 2;
+        width: root.width - self.x;
+        y: 380px;
+        part-width: 22px;
+        part-height: 22px;
+        round: true;
+        label-x: root.label-at - self.x;
+        title: "Power button";
+        function: "Hold to switch on or off, press for Superhuman Hearing";
+    }
+}
+
+export component ControlsPage inherits HorizontalLayout {
+    in-out property <int> control;
+
+    spacing: 24px;
+
+    Card {
+        title: "Left earcup";
+        horizontal-stretch: 1;
+        Earcup { control <=> root.control; }
+        Hint { text: "Choose the mode button or the assignable wheel, then pick what it does. The wheel on the right earcup sets the Bluetooth volume."; }
+    }
+
+    Card {
+        title: root.control == 0 ? "Button functions" : "Wheel functions";
+        width: 380px;
+        OptionList {
+            choices: root.control == 0 ? Headset.button-functions : Headset.wheel-functions;
+            current: root.control == 0 ? Headset.button-function : Headset.wheel-function;
+            enabled: Headset.available;
+            selected(value) => {
+                if (root.control == 0) {
+                    Headset.button-function = value;
+                    Headset.set-int("button_function", value);
+                } else {
+                    Headset.wheel-function = value;
+                    Headset.set-int("wheel_function", value);
+                }
+            }
+        }
+    }
+}

@@ -20,8 +20,10 @@ export global Headset {
     in-out property <bool> charging;
     in-out property <int> volume;
     in-out property <bool> mic-muted;
+    // one line per connected transmitter, and the charging hub's state (TX1 is the hub's transmitter)
     in-out property <[string]> transmitters;
     in-out property <int> active-transmitter;
+    in-out property <string> hub-status;
 
     // settings
     in-out property <bool> anc;
@@ -65,6 +67,9 @@ export global Headset {
     in property <[string]> game-eq-frequencies;
     in property <[string]> mic-eq-frequencies;
 
+    // stealthd's own setting: warn about a low battery
+    in-out property <bool> battery-notifications: true;
+
     // whether settings can be changed now
     out property <bool> available: daemon-running && connected && headset-link;
 
@@ -77,11 +82,16 @@ export global Headset {
     callback set-band(eq: string, band: int, tenths: int);
     callback save-preset(eq: string, name: string);
     callback delete-preset(eq: string, name: string);
+    callback set-battery-notifications(on: bool);
     // remember the preset and bands before the first change, and go back to them
     callback eq-edit-started(eq: string);
     callback eq-edit-cancelled(eq: string);
     // why a name cannot be used for a new preset, or "" if it can
     pure callback preset-name-problem(eq: string, name: string) -> string;
+}
+
+export global About {
+    in property <string> version;
 }
 
 // The app's own preferences, kept in ~/.config/swarm2linux/gui.toml.

@@ -1,16 +1,19 @@
 import { ScrollView } from "std-widgets.slint";
 import { Theme } from "theme.slint";
-import { Headset, Choice, Prefs } from "state.slint";
+import { Headset, Choice, Prefs, About } from "state.slint";
 import { Rail, Header, Banner, Overlay, Toast, Page } from "shell.slint";
 import { SettingsPage } from "pages/settings.slint";
 import { EqualizerPage } from "pages/equalizer.slint";
+import { ControlsPage } from "pages/controls.slint";
+import { DevicePage } from "pages/device.slint";
 
-export { Headset, Choice, Prefs }
+export { Headset, Choice, Prefs, About }
 
 export component AppWindow inherits Window {
     in-out property <int> page;
     // kept here so the tab stays while other pages are shown
     in-out property <int> eq-tab;
+    in-out property <int> control;
 
     private property <[Page]> pages: [
         { title: "Settings", icon: @image-url("icons/headphones.svg") },
@@ -73,10 +76,10 @@ export component AppWindow inherits Window {
                     if root.page == 1: EqualizerPage {
                         tab <=> root.eq-tab;
                     }
-                    if root.page >= 2: Text {
-                        text: "Coming soon";
-                        color: Theme.muted;
+                    if root.page == 2: ControlsPage {
+                        control <=> root.control;
                     }
+                    if root.page == 3: DevicePage { }
                 }
             }
         }

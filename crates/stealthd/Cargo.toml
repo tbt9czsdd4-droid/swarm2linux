@@ -9,6 +9,8 @@ publish.workspace = true
 anyhow.workspace = true
 async-channel = "2"
 race-hid.workspace = true
+serde = { version = "1", features = ["derive"] }
 stealth-dbus.workspace = true
 tb-proto.workspace = true
+toml = "1"
 zbus.workspace = true

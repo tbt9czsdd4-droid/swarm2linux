@@ -5,8 +5,12 @@
 //!
 //! Bus name `io.github.swarm2linux.Stealthd`, object `/io/github/swarm2linux/Headset`, interface
 //! `io.github.swarm2linux.Headset1`. Value names are those of `tb_proto::values`.
+//!
+//! Its own settings are kept in `~/.config/swarm2linux/stealthd.toml`.
 
 use std::collections::{BTreeMap, HashMap};
+use std::fs;
+use std::io;
 use std::path::{Path, PathBuf};
 use std::sync::mpsc::{self, RecvTimeoutError};
 use std::sync::{Arc, Mutex};
@@ -15,6 +19,7 @@ use std::time::{Duration, Instant};
 
 use anyhow::{Context, Result};
 use race_hid::{HidrawDevice, discover, known_product};
+use serde::{Deserialize, Serialize};
 use stealth_dbus::{BUS_NAME, INTERFACE, PATH, from_value, to_owned_value, to_value};
 use tb_proto::keys::{self, EqKeys};
 use tb_proto::values::{self, Typed};
@@ -55,6 +60,52 @@ struct Request {
 struct Shared {
     device: Option<String>,
     values: BTreeMap<&'static str, Typed>,
+    settings: Settings,
+}
+
+/// stealthd's own settings.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
+struct Settings {
+    /// Warn about a low battery with a desktop notification.
+    battery_notifications: bool,
+}
+
+impl Default for Settings {
+    fn default() -> Self {
+        Self { battery_notifications: true }
+    }
+}
+
+impl Settings {
+    fn path() -> Option<PathBuf> {
+        let config = std::env::var_os("XDG_CONFIG_HOME")
+            .map(PathBuf::from)
+            .filter(|p| p.is_absolute())
+            .or_else(|| std::env::var_os("HOME").map(|home| PathBuf::from(home).join(".config")))?;
+        Some(config.join("swarm2linux").join("stealthd.toml"))
+    }
+
+    fn load() -> Self {
+        let Some(path) = Self::path() else { return Self::default() };
+        match fs::read_to_string(&path) {
+            Ok(text) => toml::from_str(&text).unwrap_or_else(|e| {
+                eprintln!("stealthd: ignoring {}: {e}", path.display());
+                Self::default()
+            }),
+            Err(_) => Self::default(),
+        }
+    }
+
+    fn save(&self) -> io::Result<()> {
+        let path = Self::path().ok_or_else(|| io::Error::other("no home directory"))?;
+        if let Some(dir) = path.parent() {
+            fs::create_dir_all(dir)?;
+        }
+        let partial = path.with_extension("toml.new");
+        fs::write(&partial, toml::to_string(self).map_err(io::Error::other)?)?;
+        fs::rename(partial, path)
+    }
 }
 
 struct Headset {
@@ -124,6 +175,22 @@ impl Headset {
     async fn connected(&self) -> bool {
         self.shared.lock().unwrap().device.is_some()
     }
+
+    /// Whether to warn about a low battery with a desktop notification.
+    #[zbus(property)]
+    async fn battery_notifications(&self) -> bool {
+        self.shared.lock().unwrap().settings.battery_notifications
+    }
+
+    #[zbus(property)]
+    async fn set_battery_notifications(&mut self, on: bool) -> fdo::Result<()> {
+        let settings = {
+            let mut shared = self.shared.lock().unwrap();
+            shared.settings.battery_notifications = on;
+            shared.settings.clone()
+        };
+        settings.save().map_err(|e| fdo::Error::Failed(format!("saving the setting: {e}")))
+    }
 }
 
 fn which_eq(name: &str) -> fdo::Result<&'static EqKeys> {
@@ -135,7 +202,7 @@ fn which_eq(name: &str) -> fdo::Result<&'static EqKeys> {
 }
 
 fn main() -> Result<()> {
-    let shared = Arc::new(Mutex::new(Shared::default()));
+    let shared = Arc::new(Mutex::new(Shared { settings: Settings::load(), ..Shared::default() }));
     let (requests, queue) = mpsc::channel();
     let conn = zbus::blocking::connection::Builder::session()?
         .name(BUS_NAME)
@@ -291,6 +358,9 @@ impl Daemon {
             return;
         }
         self.notified_low = Some(threshold);
+        if !self.shared.lock().unwrap().settings.battery_notifications {
+            return;
+        }
         notify(&self.conn, "Headset battery low", &format!("Stealth Pro II battery at {level}%"));
     }
 

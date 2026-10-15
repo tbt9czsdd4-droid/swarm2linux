@@ -16,6 +16,7 @@ pub enum Command {
     SetBand(String, u32, i32),
     SavePreset(String, String),
     DeletePreset(String, String),
+    BatteryNotifications(bool),
 }
 
 /// Sends writes to the worker thread.
@@ -69,6 +70,7 @@ pub fn start(ui: Weak<AppWindow>) -> zbus::Result<Bridge> {
                 Command::SetBand(eq, band, tenths) => client.set_band(eq, *band, *tenths),
                 Command::SavePreset(eq, name) => client.save_preset(eq, name),
                 Command::DeletePreset(eq, name) => client.delete_preset(eq, name),
+                Command::BatteryNotifications(on) => client.set_battery_notifications(*on),
             };
             if let Err(e) = result {
                 let message = describe(&e);
@@ -82,14 +84,19 @@ pub fn start(ui: Weak<AppWindow>) -> zbus::Result<Bridge> {
     Ok(Bridge { commands })
 }
 
-/// Fetch every value and show it.
+/// Fetch every value and stealthd's setting, and show them.
 fn refresh(client: &DaemonClient, ui: &Weak<AppWindow>) {
     let values = client.values();
+    // an older stealthd does not have the setting
+    let notifications = client.battery_notifications().ok();
     let _ = ui.upgrade_in_event_loop(move |w| {
         let h = w.global::<Headset>();
         h.set_daemon_running(values.is_ok());
         if let Ok(values) = values {
             model::apply(&h, &values);
+        }
+        if let Some(on) = notifications {
+            h.set_battery_notifications(on);
         }
     });
 }

@@ -16,6 +16,8 @@ enum Target {
     Text(fn(&Headset<'_>, SharedString)),
     Ints(fn(&Headset<'_>, ModelRc<i32>)),
     Texts(fn(&Headset<'_>, ModelRc<SharedString>)),
+    /// Shown in its own way.
+    Other(fn(&Headset<'_>, &Typed)),
 }
 
 fn target(name: &str) -> Option<Target> {
@@ -30,7 +32,7 @@ fn target(name: &str) -> Option<Target> {
         "charging" => Bool(|h, v| h.set_charging(v)),
         "volume" => Int(|h, v| h.set_volume(v)),
         "mic_muted" => Bool(|h, v| h.set_mic_muted(v)),
-        "transmitters" => Texts(|h, v| h.set_transmitters(v)),
+        "transmitters" => Other(show_transmitters),
         "active_transmitter" => Int(|h, v| h.set_active_transmitter(v)),
         "anc" => Bool(|h, v| h.set_anc(v)),
         "anc_level" => Int(|h, v| h.set_anc_level(v)),
@@ -70,11 +72,37 @@ pub fn apply(h: &Headset<'_>, values: &BTreeMap<String, Typed>) {
             (Some(Target::Text(set)), Typed::Text(v)) => set(h, v.into()),
             (Some(Target::Ints(set)), Typed::Ints(v)) => set(h, ints(v)),
             (Some(Target::Texts(set)), Typed::Texts(v)) => set(h, texts(v)),
+            (Some(Target::Other(show)), v) => show(h, v),
             // an empty list cannot say what it holds and arrives as integers
             (Some(Target::Texts(set)), Typed::Ints(v)) if v.is_empty() => set(h, texts::<&str>(&[])),
             _ => eprintln!("stealth-gui: ignoring {name} = {value:?}"),
         }
     }
+}
+
+fn show_transmitters(h: &Headset<'_>, value: &Typed) {
+    let entries: &[String] = match value {
+        Typed::Texts(list) => list,
+        _ => &[],
+    };
+    let (lines, hub) = transmitters(entries);
+    h.set_transmitters(texts(&lines));
+    h.set_hub_status(hub.into());
+}
+
+/// A line per transmitter from entries like "1 2287 active", and the charging hub's state: that of slot 1.
+fn transmitters(entries: &[String]) -> (Vec<String>, String) {
+    let mut lines = Vec::new();
+    let mut hub = "Not connected".to_string();
+    for entry in entries {
+        let mut parts = entry.split_whitespace();
+        let (Some(slot), Some(product), Some(state)) = (parts.next(), parts.next(), parts.next()) else { continue };
+        lines.push(format!("Transmitter {slot} · 10f5:{product} · {state}"));
+        if slot == "1" {
+            hub = capitalized(state);
+        }
+    }
+    (lines, hub)
 }
 
 /// Fill the option lists.
@@ -161,6 +189,14 @@ mod tests {
         for name in tb_proto::values::NAMES.iter().chain(stealth_dbus::DAEMON_NAMES.iter()) {
             assert!(target(name).is_some(), "{name} is not shown");
         }
+    }
+
+    #[test]
+    fn transmitter_lines() {
+        let (lines, hub) = transmitters(&["2 229b standby".into(), "1 2287 active".into(), "bad".into()]);
+        assert_eq!(lines, ["Transmitter 2 · 10f5:229b · standby", "Transmitter 1 · 10f5:2287 · active"]);
+        assert_eq!(hub, "Active");
+        assert_eq!(transmitters(&[]).1, "Not connected");
     }
 
     #[test]
