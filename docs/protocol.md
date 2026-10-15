@@ -191,7 +191,7 @@ Matched with the order of the round-1 writes:
 |-----|------|-----------|---------|
 | 600 | `0` | | mute: flip-to-mute up `1`, down `0` **[seen]** |
 | 610 | `51`, `84` | ✎ 100, 0, 84 | sensitivity **[ui]**. The device pushed the new value *before* Swarm II's write, so it probably follows the Windows mic level (UAC feature unit 6) **[guess]** |
-| 620 | `70`, `85`, `65` | ✎ 0, 100, 85 | monitoring level (hearing your own voice) **[ui, user]** |
+| 620 | `70`, `85`, `65` | ✎ 0, 100, 85 | monitoring level (hearing your own voice): writing `0` from Linux silenced it, `65` brought it back **[seen]** |
 | 630 | `0` | ✎ 1, 0 | AI noise reduction, `1` = on: the page showed "Off" with `0`, then Swarm II wrote `1` and `0` for on and off **[ui, capture]** |
 | 640 | `1` | | **[guess]** monitoring enable: Swarm II only offers it as a hotkey, never wrote it |
 | 650 | `0` | | |
