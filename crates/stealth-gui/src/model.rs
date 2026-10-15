@@ -2,7 +2,7 @@
 
 use std::collections::BTreeMap;
 
-use slint::{ModelRc, SharedString, VecModel};
+use slint::{Model, ModelRc, SharedString, VecModel};
 use tb_proto::keys;
 use tb_proto::values::Typed;
 
@@ -93,6 +93,44 @@ pub fn init(h: &Headset<'_>) {
 /// Whether the headset takes `name` as a custom preset name.
 pub fn valid_preset_name(name: &str) -> bool {
     keys::writable(keys::GAME_EQ_NAME).is_some_and(|s| s.values.accepts_text(name))
+}
+
+/// Why `name` cannot be used for a new preset of the "game" or "mic" equalizer, or "" if it can (or is empty).
+pub fn preset_name_problem(h: &Headset<'_>, eq: &str, name: &str) -> &'static str {
+    let taken = if eq == "game" { h.get_game_eq_slots() } else { h.get_mic_eq_slots() };
+    if name.is_empty() {
+        ""
+    } else if !valid_preset_name(name) {
+        "Up to 16 characters, without quotes or backslashes"
+    } else if taken.iter().any(|s| s.eq_ignore_ascii_case(name)) {
+        "There is already a preset with this name"
+    } else {
+        ""
+    }
+}
+
+/// An equalizer's preset number and bands.
+pub type Equalizer = (i32, Vec<i32>);
+
+/// The preset and bands shown for the "game" or "mic" equalizer.
+pub fn equalizer(h: &Headset<'_>, eq: &str) -> Equalizer {
+    if eq == "game" {
+        (h.get_game_eq_preset(), h.get_game_eq_bands().iter().collect())
+    } else {
+        (h.get_mic_eq_preset(), h.get_mic_eq_bands().iter().collect())
+    }
+}
+
+/// Show a preset and bands for the "game" or "mic" equalizer.
+pub fn show_equalizer(h: &Headset<'_>, eq: &str, preset: i32, bands: &[i32]) {
+    let bands = ModelRc::new(VecModel::from(bands.to_vec()));
+    if eq == "game" {
+        h.set_game_eq_preset(preset);
+        h.set_game_eq_bands(bands);
+    } else {
+        h.set_mic_eq_preset(preset);
+        h.set_mic_eq_bands(bands);
+    }
 }
 
 fn choices(list: impl IntoIterator<Item = (i64, &'static str)>) -> ModelRc<Choice> {

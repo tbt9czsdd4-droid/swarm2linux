@@ -51,6 +51,9 @@ export global Headset {
     in-out property <string> mic-eq-name;
     in-out property <[int]> mic-eq-bands: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
     in-out property <[string]> mic-eq-slots: ["", "", "", "", ""];
+    // bands changed in this app since a preset was last chosen; Cancel puts back what was there before
+    in-out property <bool> game-eq-edited;
+    in-out property <bool> mic-eq-edited;
 
     // option lists, filled from tb_proto::keys
     in property <[Choice]> superhuman-modes;
@@ -74,5 +77,17 @@ export global Headset {
     callback set-band(eq: string, band: int, tenths: int);
     callback save-preset(eq: string, name: string);
     callback delete-preset(eq: string, name: string);
-    pure callback valid-preset-name(name: string) -> bool;
+    // remember the preset and bands before the first change, and go back to them
+    callback eq-edit-started(eq: string);
+    callback eq-edit-cancelled(eq: string);
+    // why a name cannot be used for a new preset, or "" if it can
+    pure callback preset-name-problem(eq: string, name: string) -> string;
+}
+
+// The app's own preferences, kept in ~/.config/swarm2linux/gui.toml.
+export global Prefs {
+    in-out property <bool> show-grid;
+    in-out property <bool> tray: true;
+    // a preference was changed and should be saved
+    callback changed();
 }

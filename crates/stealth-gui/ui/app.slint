@@ -1,13 +1,16 @@
 import { ScrollView } from "std-widgets.slint";
 import { Theme } from "theme.slint";
-import { Headset, Choice } from "state.slint";
+import { Headset, Choice, Prefs } from "state.slint";
 import { Rail, Header, Banner, Overlay, Toast, Page } from "shell.slint";
 import { SettingsPage } from "pages/settings.slint";
+import { EqualizerPage } from "pages/equalizer.slint";
 
-export { Headset, Choice }
+export { Headset, Choice, Prefs }
 
 export component AppWindow inherits Window {
     in-out property <int> page;
+    // kept here so the tab stays while other pages are shown
+    in-out property <int> eq-tab;
 
     private property <[Page]> pages: [
         { title: "Settings", icon: @image-url("icons/headphones.svg") },
@@ -18,6 +21,20 @@ export component AppWindow inherits Window {
     private property <string> problem: !Headset.connected
         ? "No transmitter found. Plug in the USB transmitter or the headset's cable."
         : "The headset is off or out of range. Settings show their last known values until it reconnects.";
+
+    // choosing a preset, here or on the headset, ends an edit
+    private property <int> game-preset: Headset.game-eq-preset;
+    private property <int> mic-preset: Headset.mic-eq-preset;
+    changed game-preset => {
+        if (self.game-preset != 0) {
+            Headset.game-eq-edited = false;
+        }
+    }
+    changed mic-preset => {
+        if (self.mic-preset != 0) {
+            Headset.mic-eq-edited = false;
+        }
+    }
 
     title: "swarm2linux";
     preferred-width: 1200px;
@@ -53,7 +70,10 @@ export component AppWindow inherits Window {
                     padding-right: 32px;
                     padding-bottom: 32px;
                     if root.page == 0: SettingsPage { }
-                    if root.page != 0: Text {
+                    if root.page == 1: EqualizerPage {
+                        tab <=> root.eq-tab;
+                    }
+                    if root.page >= 2: Text {
                         text: "Coming soon";
                         color: Theme.muted;
                     }

@@ -1,0 +1,180 @@
+// The ten equalizer bands as a graph from -9 to +9 dB, one draggable dot per band. Values are in tenths of a dB
+// and snap to half a dB, as the headset stores them.
+
+import { Theme } from "../theme.slint";
+
+export component EqGraph {
+    in property <[int]> bands;
+    in property <[string]> frequencies;
+    in property <bool> enabled: true;
+    in property <bool> grid;
+    // a band (0-9) was dragged to a new value
+    callback released(int, int);
+
+    private property <int> drag-band: -1;
+    private property <int> drag-value;
+    private property <length> pad-left: 64px;
+    private property <length> pad-right: 8px;
+    private property <length> pad-top: 14px;
+    private property <length> pad-bottom: 40px;
+    private property <length> plot-w: root.width - root.pad-left - root.pad-right;
+    private property <length> plot-h: root.height - root.pad-top - root.pad-bottom;
+
+    function shown(i: int) -> int {
+        return i == root.drag-band ? root.drag-value : root.bands[i];
+    }
+    function cx(i: int) -> length {
+        return root.pad-left + (i + 0.5) * root.plot-w / 10;
+    }
+    function cy(tenths: int) -> length {
+        return root.pad-top + (90 - tenths) / 180 * root.plot-h;
+    }
+    function value-at(y: length) -> int {
+        return Math.clamp(Math.round((root.pad-top + root.plot-h / 2 - y) / root.plot-h * 36) * 5, -90, 90);
+    }
+    function db(tenths: int) -> string {
+        return (tenths > 0 ? "+" : "") + (tenths / 10) + " dB";
+    }
+    function point(i: int) -> string {
+        return (root.cx(i) / 1px) + " " + (root.cy(root.shown(i)) / 1px);
+    }
+
+    min-height: 260px;
+    opacity: root.enabled ? 1 : 0.5;
+
+    // the fine grid, every dB
+    if root.grid: Rectangle {
+        for k in 19: Rectangle {
+            x: root.pad-left;
+            width: root.plot-w;
+            y: root.cy(90 - k * 10);
+            height: 1px;
+            background: #1f242c;
+        }
+    }
+
+    // the scale
+    for level in [90, 50, 0, -50, -90]: Rectangle {
+        Rectangle {
+            x: root.pad-left;
+            width: root.plot-w;
+            y: root.cy(level);
+            height: 1px;
+            background: level == 0 || level == 90 || level == -90 ? Theme.line : transparent;
+        }
+        Text {
+            x: 0;
+            width: root.pad-left - 16px;
+            y: root.cy(level) - self.height / 2;
+            text: root.db(level);
+            color: level == 0 ? #9fc3ff : Theme.muted;
+            font-size: Theme.small-size;
+            horizontal-alignment: right;
+        }
+    }
+
+    // the curve through the dots
+    Path {
+        x: 0;
+        y: 0;
+        width: root.width;
+        height: root.height;
+        viewbox-width: root.width / 1px;
+        viewbox-height: root.height / 1px;
+        stroke: Theme.fill;
+        stroke-width: 2px;
+        opacity: 0.7;
+        commands: "M " + root.point(0) + " L " + root.point(1) + " L " + root.point(2) + " L " + root.point(3)
+            + " L " + root.point(4) + " L " + root.point(5) + " L " + root.point(6) + " L " + root.point(7)
+            + " L " + root.point(8) + " L " + root.point(9);
+    }
+
+    for value[i] in root.bands: Rectangle {
+        x: root.cx(i) - self.width / 2;
+        y: 0;
+        width: root.plot-w / 10;
+        height: root.height;
+        accessible-role: slider;
+        accessible-label: root.frequencies[i];
+        accessible-value: root.db(root.shown(i));
+        accessible-value-minimum: -90;
+        accessible-value-maximum: 90;
+        accessible-value-step: 5;
+        accessible-action-increment => { root.released(i, Math.min(value + 5, 90)); }
+        accessible-action-decrement => { root.released(i, Math.max(value - 5, -90)); }
+
+        // the rail, and the part from 0 dB to the dot
+        Rectangle {
+            x: (parent.width - self.width) / 2;
+            width: 2px;
+            y: root.pad-top;
+            height: root.plot-h;
+            background: Theme.track;
+        }
+        Rectangle {
+            x: (parent.width - self.width) / 2;
+            width: 2px;
+            y: Math.min(root.cy(root.shown(i)), root.cy(0));
+            height: Math.abs(root.cy(root.shown(i)) - root.cy(0));
+            background: Theme.fill;
+        }
+
+        // the value while dragging or pointing at it
+        if i == root.drag-band || (touch.has-hover && root.enabled): Rectangle {
+            width: 64px;
+            height: 22px;
+            x: (parent.width - self.width) / 2;
+            y: root.cy(root.shown(i)) + (root.shown(i) > 60 ? 14px : -36px);
+            border-radius: 4px;
+            background: Theme.popup;
+            Text {
+                text: root.db(root.shown(i));
+                color: Theme.text;
+                font-size: Theme.small-size;
+            }
+        }
+
+        Rectangle {
+            width: 16px;
+            height: 16px;
+            x: (parent.width - self.width) / 2;
+            y: root.cy(root.shown(i)) - self.height / 2;
+            border-radius: 8px;
+            background: #ffffff;
+            drop-shadow-blur: i == root.drag-band ? 8px : 0;
+            drop-shadow-color: #7b45f580;
+        }
+
+        Text {
+            y: root.pad-top + root.plot-h + 14px;
+            width: parent.width;
+            text: root.frequencies[i];
+            color: Theme.text;
+            font-size: Theme.small-size;
+            horizontal-alignment: center;
+        }
+
+        touch := TouchArea {
+            y: root.pad-top - 10px;
+            height: root.plot-h + 20px;
+            enabled: root.enabled;
+            mouse-cursor: pointer;
+            pointer-event(event) => {
+                if (event.button == PointerEventButton.left && event.kind == PointerEventKind.down) {
+                    root.drag-band = i;
+                    root.drag-value = root.value-at(self.y + self.mouse-y);
+                } else if (event.button == PointerEventButton.left && event.kind == PointerEventKind.up && root.drag-band == i) {
+                    if (root.drag-value != value) {
+                        root.released(i, root.drag-value);
+                    }
+                    root.drag-band = -1;
+                }
+            }
+            moved => {
+                if (root.drag-band == i) {
+                    root.drag-value = root.value-at(self.y + self.mouse-y);
+                }
+            }
+        }
+    }
+}

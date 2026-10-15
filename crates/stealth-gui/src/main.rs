@@ -3,12 +3,16 @@
 
 mod bridge;
 mod model;
+mod prefs;
 
 slint::include_modules!();
 
+use std::cell::RefCell;
+use std::collections::HashMap;
 use std::fs::File;
 use std::io::BufWriter;
 use std::path::{Path, PathBuf};
+use std::rc::Rc;
 use std::time::Duration;
 
 use anyhow::Result;
@@ -30,9 +34,52 @@ fn main() -> Result<()> {
     headset.on_set_band(move |eq, band, tenths| b.send(Command::SetBand(eq.into(), band as u32, tenths)));
     let b = bridge.clone();
     headset.on_save_preset(move |eq, name| b.send(Command::SavePreset(eq.into(), name.into())));
-    let b = bridge;
+    let b = bridge.clone();
     headset.on_delete_preset(move |eq, name| b.send(Command::DeletePreset(eq.into(), name.into())));
-    headset.on_valid_preset_name(|name| model::valid_preset_name(&name));
+    let weak = ui.as_weak();
+    headset.on_preset_name_problem(move |eq, name| {
+        weak.upgrade().map(|ui| model::preset_name_problem(&ui.global::<Headset>(), &eq, &name)).unwrap_or("").into()
+    });
+
+    // the preset and bands of each equalizer from before the first change, for Cancel
+    let before: Rc<RefCell<HashMap<String, model::Equalizer>>> = Rc::default();
+    let (weak, saved) = (ui.as_weak(), before.clone());
+    headset.on_eq_edit_started(move |eq| {
+        if let Some(ui) = weak.upgrade() {
+            saved.borrow_mut().insert(eq.to_string(), model::equalizer(&ui.global::<Headset>(), &eq));
+        }
+    });
+    let (weak, b) = (ui.as_weak(), bridge);
+    headset.on_eq_edit_cancelled(move |eq| {
+        let (Some(ui), Some((preset, bands))) = (weak.upgrade(), before.borrow_mut().remove(eq.as_str())) else {
+            return;
+        };
+        let h = ui.global::<Headset>();
+        if preset != 0 {
+            b.send(Command::Set(format!("{eq}_eq_preset"), Typed::Int(preset.into())));
+        } else {
+            let (_, now) = model::equalizer(&h, &eq);
+            for (band, (&old, &new)) in bands.iter().zip(&now).enumerate() {
+                if old != new {
+                    b.send(Command::SetBand(eq.to_string(), band as u32 + 1, old));
+                }
+            }
+        }
+        model::show_equalizer(&h, &eq, preset, &bands);
+    });
+
+    let saved = prefs::load();
+    let p = ui.global::<Prefs>();
+    p.set_show_grid(saved.show_grid);
+    p.set_tray(saved.tray);
+    let weak = ui.as_weak();
+    p.on_changed(move || {
+        let Some(ui) = weak.upgrade() else { return };
+        let p = ui.global::<Prefs>();
+        if let Err(e) = prefs::save(&prefs::Preferences { show_grid: p.get_show_grid(), tray: p.get_tray() }) {
+            eprintln!("stealth-gui: saving preferences: {e}");
+        }
+    });
 
     // development aids: STEALTH_GUI_PAGE=<n> opens page n (0-3); STEALTH_GUI_SNAPSHOT=<file.png> saves the window
     // as an image after STEALTH_GUI_SNAPSHOT_AFTER seconds (default 2) and quits

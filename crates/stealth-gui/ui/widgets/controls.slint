@@ -14,7 +14,7 @@ export component Card inherits Rectangle {
         padding-top: 20px;
         spacing: 18px;
         alignment: start;
-        Text {
+        if root.title != "": Text {
             text: root.title.to-uppercase();
             color: Theme.text;
             font-size: Theme.title-size;
