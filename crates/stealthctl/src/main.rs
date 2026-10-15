@@ -1,20 +1,25 @@
 //! `stealthctl`: control a Turtle Beach Stealth Pro II from Linux.
+//!
+//! Talks to `stealthd` when it is running (it owns the device then), and to the device directly otherwise.
 
+use std::collections::BTreeMap;
 use std::fs;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 
 use anyhow::{Context, Result, bail};
 use clap::{Parser, Subcommand, ValueEnum};
 use race_hid::{HidrawDevice, discover, known_product};
 use serde_json::Value;
+use stealth_dbus::DaemonClient;
 use tb_proto::keys::{self, EqKeys};
-use tb_proto::{Client, State, TransmitterState};
+use tb_proto::values::{self, Typed};
+use tb_proto::{Client, State};
 
 #[derive(Parser)]
 #[command(name = "stealthctl", version, about = "Control a Turtle Beach Stealth Pro II from Linux")]
 struct Cli {
-    /// hidraw node to use (default: the first Turtle Beach transmitter or headset)
+    /// hidraw node to use directly (default: go through stealthd if it runs, else the first device found)
     #[arg(long, global = true)]
     device: Option<PathBuf>,
     #[command(subcommand)]
@@ -27,22 +32,11 @@ enum Cmd {
     Devices,
     /// Show battery, connection and settings
     Status,
-    /// Print every record as JSON
-    Dump,
-    /// Print one record as JSON, e.g. GSI or SAF
-    Get { record: String },
-    /// Print changes as the headset pushes them
+    /// Print changes as they happen
     Watch {
         /// stop after this many seconds (default: run until interrupted)
         #[arg(long)]
         seconds: Option<u64>,
-    },
-    /// Write a raw key such as 0x1210 (only keys Swarm II was seen writing)
-    Set {
-        #[arg(value_parser = parse_key)]
-        key: u16,
-        #[arg(allow_hyphen_values = true)]
-        value: String,
     },
     /// Game equalizer
     Eq {
@@ -76,7 +70,7 @@ enum Cmd {
     },
     /// What the button above the wheels on the left earcup does
     Button { function: ButtonFunction },
-    /// What the assignable wheel does
+    /// What the second wheel on the left earcup does
     Wheel { function: WheelFunction },
     /// Auto shut-off and wake on motion
     Power {
@@ -88,9 +82,20 @@ enum Cmd {
         #[command(subcommand)]
         cmd: HubCmd,
     },
-    /// Save all records to a JSON file
+    /// Print every record as JSON (direct access only)
+    Dump,
+    /// Print one record as JSON, e.g. GSI or SAF (direct access only)
+    Get { record: String },
+    /// Write a raw key such as 0x1210 (direct access only; only keys Swarm II was seen writing)
+    Set {
+        #[arg(value_parser = parse_key)]
+        key: u16,
+        #[arg(allow_hyphen_values = true)]
+        value: String,
+    },
+    /// Save all records to a JSON file (direct access only)
     Snapshot { file: PathBuf },
-    /// Write back the settings saved in a snapshot
+    /// Write back the settings saved in a snapshot (direct access only)
     Restore { file: PathBuf },
 }
 
@@ -121,11 +126,8 @@ enum OnOff {
 }
 
 impl OnOff {
-    fn value(self) -> i64 {
-        match self {
-            OnOff::On => 1,
-            OnOff::Off => 0,
-        }
+    fn typed(self) -> Typed {
+        Typed::Bool(matches!(self, OnOff::On))
     }
 }
 
@@ -217,60 +219,135 @@ fn parse_key(s: &str) -> Result<u16, String> {
     u16::from_str_radix(digits, 16).map_err(|e| format!("not a hex key: {e}"))
 }
 
-type Headset = Client<HidrawDevice>;
+type Device = Client<HidrawDevice>;
+type Values = BTreeMap<String, Typed>;
+
+/// Where commands go: the running daemon, or the device itself.
+enum Backend {
+    Daemon(DaemonClient),
+    Direct(Box<Device>),
+}
+
+impl Backend {
+    fn open(device: Option<&Path>) -> Result<Self> {
+        if device.is_none()
+            && let Some(daemon) = DaemonClient::connect().context("checking for stealthd")?
+        {
+            return Ok(Backend::Daemon(daemon));
+        }
+        Ok(Backend::Direct(Box::new(tb_proto::open(device).context("opening the headset")?)))
+    }
+
+    /// The device, for commands that need raw access.
+    fn direct(&mut self) -> Result<&mut Device> {
+        match self {
+            Backend::Direct(client) => Ok(client),
+            Backend::Daemon(_) => bail!(
+                "stealthd is running and owns the headset; stop it for raw access \
+                 (systemctl --user stop stealthd), or use the named commands"
+            ),
+        }
+    }
+
+    fn values(&mut self) -> Result<Values> {
+        match self {
+            Backend::Daemon(d) => Ok(d.values()?),
+            Backend::Direct(client) => {
+                let state = read_all(client)?;
+                let mut v: Values = values::values(&state).into_iter().map(|(k, v)| (k.to_string(), v)).collect();
+                v.insert("connected".into(), Typed::Bool(true));
+                Ok(v)
+            }
+        }
+    }
+
+    fn set(&mut self, name: &str, value: Typed) -> Result<()> {
+        match self {
+            Backend::Daemon(d) => Ok(d.set(name, &value)?),
+            Backend::Direct(client) => {
+                let (key, number) = values::to_write(name, &value).with_context(|| format!("{name} is not writable"))?;
+                client.set(key, number)?;
+                show_updates(client)
+            }
+        }
+    }
+
+    fn set_band(&mut self, eq: &EqKeys, band: u8, tenths: i64) -> Result<()> {
+        match self {
+            Backend::Daemon(d) => Ok(d.set_band(eq_name(eq), u32::from(band), tenths as i32)?),
+            Backend::Direct(client) => {
+                client.set(eq.band(usize::from(band - 1)), tenths)?;
+                show_updates(client)
+            }
+        }
+    }
+
+    fn save_preset(&mut self, eq: &EqKeys, name: &str) -> Result<()> {
+        match self {
+            Backend::Daemon(d) => Ok(d.save_preset(eq_name(eq), name)?),
+            Backend::Direct(client) => {
+                let state = read_eq(client, eq)?;
+                client.save_new_preset(&state, eq, name)?;
+                show_updates(client)
+            }
+        }
+    }
+
+    fn delete_preset(&mut self, eq: &EqKeys, name: &str) -> Result<()> {
+        match self {
+            Backend::Daemon(d) => Ok(d.delete_preset(eq_name(eq), name)?),
+            Backend::Direct(client) => {
+                let state = read_eq(client, eq)?;
+                client.delete_named_preset(&state, eq, name)?;
+                show_updates(client)
+            }
+        }
+    }
+}
+
+fn eq_name(eq: &EqKeys) -> &'static str {
+    if eq.preset == keys::GAME_EQ_PRESET { "game" } else { "mic" }
+}
 
 fn main() -> Result<()> {
+    // end quietly when the output is cut off (`stealthctl eq list | head`) instead of panicking
+    // SAFETY: setting a signal disposition to its default before any threads exist.
+    unsafe { libc::signal(libc::SIGPIPE, libc::SIG_DFL) };
     let cli = Cli::parse();
     if let Cmd::Devices = cli.cmd {
         return devices();
     }
-    let mut client = tb_proto::open(cli.device.as_deref()).context("opening the headset")?;
+    let mut backend = Backend::open(cli.device.as_deref())?;
+    let b = &mut backend;
 
     match cli.cmd {
         Cmd::Devices => unreachable!(),
-        Cmd::Status => status(&mut client),
-        Cmd::Dump => {
-            let state = read_all(&mut client)?;
-            println!("{}", serde_json::to_string_pretty(&state.to_json())?);
-            Ok(())
-        }
-        Cmd::Get { record } => {
-            let doc = client.subscribe(&record)?;
-            println!("{}", serde_json::to_string_pretty(&Value::Object(doc.kvp))?);
-            Ok(())
-        }
-        Cmd::Watch { seconds } => watch(&mut client, seconds.map(Duration::from_secs)),
-        Cmd::Set { key, value } => {
-            match value.parse::<i64>() {
-                Ok(n) => client.set(key, n)?,
-                Err(_) => client.set_text(key, &value)?,
-            }
-            show_updates(&mut client)
-        }
-        Cmd::Eq { cmd } => equalizer(&mut client, &keys::GAME_EQ, cmd),
-        Cmd::MicEq { cmd } => equalizer(&mut client, &keys::MIC_EQ, cmd),
+        Cmd::Status => status(b),
+        Cmd::Watch { seconds } => watch(b, seconds.map(Duration::from_secs)),
+        Cmd::Eq { cmd } => equalizer(b, &keys::GAME_EQ, cmd),
+        Cmd::MicEq { cmd } => equalizer(b, &keys::MIC_EQ, cmd),
         Cmd::Shh { cmd } => match cmd {
-            ShhCmd::On => write(&mut client, &[(keys::SUPERHUMAN_HEARING, 1)]),
-            ShhCmd::Off => write(&mut client, &[(keys::SUPERHUMAN_HEARING, 0)]),
-            ShhCmd::Mode { mode } => write(&mut client, &[(keys::SUPERHUMAN_MODE, mode as i64)]),
-            ShhCmd::Level { level } => write(&mut client, &[(keys::SUPERHUMAN_LEVEL, level)]),
+            ShhCmd::On => b.set("superhuman", Typed::Bool(true)),
+            ShhCmd::Off => b.set("superhuman", Typed::Bool(false)),
+            ShhCmd::Mode { mode } => b.set("superhuman_mode", Typed::Int(mode as i64)),
+            ShhCmd::Level { level } => b.set("superhuman_level", Typed::Int(level)),
         },
         Cmd::Anc { cmd } => match cmd {
-            AncCmd::On => write(&mut client, &[(keys::ANC, 1)]),
-            AncCmd::Off => write(&mut client, &[(keys::ANC, 0)]),
-            AncCmd::Level { level } => write(&mut client, &[(keys::ANC_LEVEL, level)]),
+            AncCmd::On => b.set("anc", Typed::Bool(true)),
+            AncCmd::Off => b.set("anc", Typed::Bool(false)),
+            AncCmd::Level { level } => b.set("anc_level", Typed::Int(level)),
         },
         Cmd::Monitor { cmd } => match cmd {
-            MonitorCmd::Level { level } => write(&mut client, &[(keys::MONITORING_LEVEL, level)]),
+            MonitorCmd::Level { level } => b.set("monitoring_level", Typed::Int(level)),
         },
         Cmd::Mic { cmd } => match cmd {
-            MicCmd::Sensitivity { level } => write(&mut client, &[(keys::MIC_SENSITIVITY, level)]),
-            MicCmd::Gate { state } => write(&mut client, &[(keys::NOISE_GATE, state.value())]),
-            MicCmd::GateLevel { level } => write(&mut client, &[(keys::NOISE_GATE_LEVEL, level)]),
-            MicCmd::Ai { state } => write(&mut client, &[(keys::AI_NOISE_REDUCTION, state.value())]),
+            MicCmd::Sensitivity { level } => b.set("mic_sensitivity", Typed::Int(level)),
+            MicCmd::Gate { state } => b.set("noise_gate", state.typed()),
+            MicCmd::GateLevel { level } => b.set("noise_gate_level", Typed::Int(level)),
+            MicCmd::Ai { state } => b.set("ai_noise_reduction", state.typed()),
         },
-        Cmd::Button { function } => write(&mut client, &[(keys::BUTTON_FUNCTION, function as i64)]),
-        Cmd::Wheel { function } => write(&mut client, &[(keys::WHEEL_FUNCTION, function as i64 + 1)]),
+        Cmd::Button { function } => b.set("button_function", Typed::Int(function as i64)),
+        Cmd::Wheel { function } => b.set("wheel_function", Typed::Int(function as i64 + 1)),
         Cmd::Power { cmd } => match cmd {
             PowerCmd::AutoOff { minutes } => {
                 let n = keys::AUTO_SHUTOFF_OPTIONS
@@ -278,21 +355,39 @@ fn main() -> Result<()> {
                     .find(|(_, label)| label.split(' ').next() == Some(minutes.as_str()))
                     .map(|(n, _)| *n)
                     .context("auto-off takes never, 5, 10, 20 or 30")?;
-                write(&mut client, &[(keys::AUTO_SHUTOFF, n)])
+                b.set("auto_shutoff", Typed::Int(n))
             }
-            PowerCmd::WakeOnMotion { state } => write(&mut client, &[(keys::WAKE_ON_MOTION, state.value())]),
+            PowerCmd::WakeOnMotion { state } => b.set("wake_on_motion", state.typed()),
         },
         Cmd::Hub { cmd } => match cmd {
-            HubCmd::Led1 { level } => write(&mut client, &[(keys::HUB_LED_1, level)]),
-            HubCmd::Led2 { level } => write(&mut client, &[(keys::HUB_LED_2, level)]),
+            HubCmd::Led1 { level } => b.set("hub_led_1", Typed::Int(level)),
+            HubCmd::Led2 { level } => b.set("hub_led_2", Typed::Int(level)),
         },
+        Cmd::Dump => {
+            let state = read_all(b.direct()?)?;
+            println!("{}", serde_json::to_string_pretty(&state.to_json())?);
+            Ok(())
+        }
+        Cmd::Get { record } => {
+            let doc = b.direct()?.subscribe(&record)?;
+            println!("{}", serde_json::to_string_pretty(&Value::Object(doc.kvp))?);
+            Ok(())
+        }
+        Cmd::Set { key, value } => {
+            let client = b.direct()?;
+            match value.parse::<i64>() {
+                Ok(n) => client.set(key, n)?,
+                Err(_) => client.set_text(key, &value)?,
+            }
+            show_updates(client)
+        }
         Cmd::Snapshot { file } => {
-            let state = read_all(&mut client)?;
+            let state = read_all(b.direct()?)?;
             fs::write(&file, serde_json::to_string_pretty(&state.to_json())? + "\n")?;
             println!("saved {}", file.display());
             Ok(())
         }
-        Cmd::Restore { file } => restore(&mut client, &file),
+        Cmd::Restore { file } => restore(b.direct()?, &file),
     }
 }
 
@@ -302,11 +397,14 @@ fn devices() -> Result<()> {
         let usable = if d.vendor_collection { "" } else { " (no vendor collection)" };
         println!("{}  10f5:{:04x}  {}  [{what}]{usable}", d.path.display(), d.pid, d.name);
     }
+    if DaemonClient::connect().ok().flatten().is_some() {
+        println!("stealthd is running and owns the headset");
+    }
     Ok(())
 }
 
 /// Subscribe to every record the device lists.
-fn read_all(client: &mut Headset) -> Result<State> {
+fn read_all(client: &mut Device) -> Result<State> {
     let mut state = State::new();
     for record in client.index()? {
         match client.subscribe(&record) {
@@ -323,7 +421,7 @@ fn read_all(client: &mut Headset) -> Result<State> {
 }
 
 /// Subscribe to the records an equalizer needs.
-fn read_eq(client: &mut Headset, eq: &EqKeys) -> Result<State> {
+fn read_eq(client: &mut Device, eq: &EqKeys) -> Result<State> {
     let mut state = State::new();
     let records: &[&str] = if eq.preset == keys::GAME_EQ_PRESET {
         &["AQG", "CEC", "CG1", "CG2", "CG3", "CG4", "CG5"]
@@ -336,42 +434,150 @@ fn read_eq(client: &mut Headset, eq: &EqKeys) -> Result<State> {
     Ok(state)
 }
 
-/// Write keys in order, then show what the headset pushed back.
-fn write(client: &mut Headset, writes: &[(u16, i64)]) -> Result<()> {
-    for &(key, value) in writes {
-        client.set(key, value).with_context(|| format!("writing {key:#x} = {value}"))?;
-    }
-    show_updates(client)
-}
-
-fn show_updates(client: &mut Headset) -> Result<()> {
+/// Show what the headset pushed back after a direct write.
+fn show_updates(client: &mut Device) -> Result<()> {
     for doc in client.wait_updates(Duration::from_millis(400))? {
         for (k, v) in &doc.kvp {
-            println!("{} = {}", describe_key(k), show_value(v));
+            println!("{} = {}", describe_key(k), show_json(v));
         }
     }
     Ok(())
 }
 
-fn equalizer(client: &mut Headset, eq: &EqKeys, cmd: EqCmd) -> Result<()> {
+fn int(v: &Values, name: &str) -> Option<i64> {
+    match v.get(name) {
+        Some(Typed::Int(n)) => Some(*n),
+        _ => None,
+    }
+}
+
+fn text<'a>(v: &'a Values, name: &str) -> Option<&'a str> {
+    match v.get(name) {
+        Some(Typed::Text(s)) => Some(s),
+        _ => None,
+    }
+}
+
+fn on(v: &Values, name: &str) -> &'static str {
+    match v.get(name) {
+        Some(Typed::Bool(true)) => "on",
+        Some(Typed::Bool(false)) => "off",
+        _ => "?",
+    }
+}
+
+fn num(v: &Values, name: &str) -> String {
+    int(v, name).map_or("?".to_string(), |n| n.to_string())
+}
+
+fn pick(v: &Values, name: &str, options: &[(i64, &'static str)]) -> &'static str {
+    int(v, name).and_then(|n| options.iter().find(|(o, _)| *o == n)).map_or("?", |(_, label)| label)
+}
+
+fn bands_text(v: &Values, name: &str) -> String {
+    match v.get(name) {
+        Some(Typed::Ints(b)) => b.iter().map(|x| format!("{:+.1}", *x as f64 / 10.0)).collect::<Vec<_>>().join(" "),
+        _ => "?".to_string(),
+    }
+}
+
+/// Custom preset slots: (preset number, name) for the used ones.
+fn custom_presets(v: &Values, eq: &EqKeys) -> Vec<(i64, String)> {
+    match v.get(&format!("{}_eq_slots", eq_name(eq))) {
+        Some(Typed::Texts(names)) => names
+            .iter()
+            .enumerate()
+            .filter(|(_, n)| !n.is_empty())
+            .map(|(i, n)| (keys::FIRST_CUSTOM_PRESET + i as i64, n.clone()))
+            .collect(),
+        _ => Vec::new(),
+    }
+}
+
+fn preset_name(v: &Values, eq: &EqKeys) -> String {
+    match int(v, &format!("{}_eq_preset", eq_name(eq))) {
+        Some(0) => "custom (unsaved)".to_string(),
+        Some(n) => eq
+            .presets
+            .iter()
+            .find(|(p, _)| *p == n)
+            .map(|(_, name)| name.to_string())
+            .or_else(|| custom_presets(v, eq).into_iter().find(|(p, _)| *p == n).map(|(_, name)| format!("{name} (custom)")))
+            .unwrap_or_else(|| format!("preset {n}")),
+        None => "?".to_string(),
+    }
+}
+
+fn status(b: &mut Backend) -> Result<()> {
+    let v = b.values()?;
+    if v.get("connected") != Some(&Typed::Bool(true)) {
+        println!("No headset connected (stealthd is waiting for one).");
+        return Ok(());
+    }
+    let via = match b {
+        Backend::Daemon(_) => format!("via stealthd, {}", text(&v, "device").unwrap_or("?")),
+        Backend::Direct(_) => "direct".to_string(),
+    };
+    println!("Connection    {via}");
+    println!("Firmware      {}", text(&v, "firmware").unwrap_or("?"));
+    let battery = match int(&v, "battery") {
+        Some(n) if n >= 0 => format!("{n}%"),
+        _ => "unknown".to_string(),
+    };
+    let charging = if on(&v, "charging") == "on" { ", charging" } else { "" };
+    println!("Headset       {}: battery {battery}{charging}", text(&v, "name").unwrap_or("?"));
+    let tx = match v.get("transmitters") {
+        Some(Typed::Texts(t)) if !t.is_empty() => t.iter().map(|e| format!("TX{e}")).collect::<Vec<_>>().join(", "),
+        _ => "none".to_string(),
+    };
+    println!("Transmitters  {tx}");
+    println!("Volume        {}", num(&v, "volume"));
+    println!("Game EQ       {}  [{}] dB", preset_name(&v, &keys::GAME_EQ), bands_text(&v, "game_eq_bands"));
+    println!("Mic EQ        {}  [{}] dB", preset_name(&v, &keys::MIC_EQ), bands_text(&v, "mic_eq_bands"));
+    let mode = int(&v, "superhuman_mode").and_then(|m| keys::SUPERHUMAN_MODES.get(m as usize).copied()).unwrap_or("?");
+    println!("Superhuman    {} ({mode}, level {})", on(&v, "superhuman"), num(&v, "superhuman_level"));
+    println!("ANC           {} (level {}: 0 ambient … 100 full ANC)", on(&v, "anc"), num(&v, "anc_level"));
+    let muted = if on(&v, "mic_muted") == "on" { "muted" } else { "live" };
+    println!(
+        "Mic           {muted}, sensitivity {}, A.I. noise reduction {}",
+        num(&v, "mic_sensitivity"),
+        on(&v, "ai_noise_reduction")
+    );
+    println!("Noise gate    {} (level {})", on(&v, "noise_gate"), num(&v, "noise_gate_level"));
+    println!("Monitoring    level {}", num(&v, "monitoring_level"));
+    println!("Button        {}", pick(&v, "button_function", &keys::BUTTON_FUNCTIONS));
+    println!("Wheel         {}", pick(&v, "wheel_function", &keys::WHEEL_FUNCTIONS));
+    println!(
+        "Power         auto shut-off {}, wake on motion {}",
+        pick(&v, "auto_shutoff", &keys::AUTO_SHUTOFF_OPTIONS),
+        on(&v, "wake_on_motion")
+    );
+    println!("Charging hub  LED 1 {}, LED 2 {}", num(&v, "hub_led_1"), num(&v, "hub_led_2"));
+    Ok(())
+}
+
+fn equalizer(b: &mut Backend, eq: &EqKeys, cmd: EqCmd) -> Result<()> {
+    let name = eq_name(eq);
     match cmd {
         EqCmd::List => {
-            let s = read_eq(client, eq)?;
-            let current = s.equalizer(eq);
-            println!("{}: {}", eq.what, preset_name(eq, &s, current.preset));
+            let v = b.values()?;
+            println!("{}: {}", eq.what, preset_name(&v, eq));
+            let bands = match v.get(&format!("{name}_eq_bands")) {
+                Some(Typed::Ints(list)) => list.clone(),
+                _ => Vec::new(),
+            };
             for (i, freq) in eq.frequencies.iter().enumerate() {
-                let db = current.bands[i].map_or("?".to_string(), |v| format!("{:+.1} dB", v as f64 / 10.0));
+                let db = bands.get(i).map_or("?".to_string(), |x| format!("{:+.1} dB", *x as f64 / 10.0));
                 println!("  band {:2}  {freq:>8}  {db}", i + 1);
             }
             println!("built-in presets:");
-            for (n, name) in eq.presets {
-                println!("  {n:2}  {name}");
+            for (n, preset) in eq.presets {
+                println!("  {n:2}  {preset}");
             }
-            let custom = s.custom_presets(eq);
+            let custom = custom_presets(&v, eq);
             println!("custom presets:{}", if custom.is_empty() { " none" } else { "" });
-            for p in custom {
-                let bands: Vec<String> = p.bands.iter().map(|v| format!("{:+.1}", *v as f64 / 10.0)).collect();
-                println!("  {:2}  {}  [{}]", p.number, p.name, bands.join(" "));
+            for (n, preset) in custom {
+                println!("  {n:2}  {preset}");
             }
             Ok(())
         }
@@ -379,40 +585,18 @@ fn equalizer(client: &mut Headset, eq: &EqKeys, cmd: EqCmd) -> Result<()> {
             let number = match find_builtin(eq, &preset) {
                 Some(n) => n,
                 None => {
-                    let s = read_eq(client, eq)?;
-                    match s.custom_presets(eq).iter().find(|p| p.name.eq_ignore_ascii_case(&preset)) {
-                        Some(p) => p.number,
+                    let v = b.values()?;
+                    match custom_presets(&v, eq).into_iter().find(|(_, p)| p.eq_ignore_ascii_case(&preset)) {
+                        Some((n, _)) => n,
                         None => bail!("no {} preset called {preset:?}; see `list`", eq.what),
                     }
                 }
             };
-            write(client, &[(eq.preset, number)])
+            b.set(&format!("{name}_eq_preset"), Typed::Int(number))
         }
-        EqCmd::Band { band, db } => {
-            let value = ((db * 10.0) / 5.0).round() as i64 * 5;
-            write(client, &[(eq.band(usize::from(band - 1)), value)])
-        }
-        EqCmd::Save { name } => {
-            let s = read_eq(client, eq)?;
-            if s.custom_presets(eq).iter().any(|p| p.name.eq_ignore_ascii_case(&name)) {
-                bail!("a {} preset called {name:?} already exists", eq.what);
-            }
-            let slot = s.free_custom_slot(eq).context("all 5 custom preset slots are in use")?;
-            let mut bands = [0i64; keys::BAND_COUNT];
-            for (i, b) in s.equalizer(eq).bands.iter().enumerate() {
-                bands[i] = b.context("current bands unknown")?;
-            }
-            client.save_preset(eq, slot, &bands, &name)?;
-            show_updates(client)
-        }
-        EqCmd::Delete { name } => {
-            let s = read_eq(client, eq)?;
-            let Some(p) = s.custom_presets(eq).into_iter().find(|p| p.name.eq_ignore_ascii_case(&name)) else {
-                bail!("no custom {} preset called {name:?}", eq.what);
-            };
-            client.delete_preset(eq, &p.name)?;
-            show_updates(client)
-        }
+        EqCmd::Band { band, db } => b.set_band(eq, band, ((db * 10.0) / 5.0).round() as i64 * 5),
+        EqCmd::Save { name } => b.save_preset(eq, &name),
+        EqCmd::Delete { name } => b.delete_preset(eq, &name),
     }
 }
 
@@ -424,99 +608,40 @@ fn find_builtin(eq: &EqKeys, wanted: &str) -> Option<i64> {
     })
 }
 
-fn preset_name(eq: &EqKeys, s: &State, preset: Option<i64>) -> String {
-    match preset {
-        Some(0) => "custom (unsaved)".to_string(),
-        Some(n) => eq
-            .presets
-            .iter()
-            .find(|(p, _)| *p == n)
-            .map(|(_, name)| name.to_string())
-            .or_else(|| s.custom_presets(eq).into_iter().find(|p| p.number == n).map(|p| format!("{} (custom)", p.name)))
-            .unwrap_or_else(|| format!("preset {n}")),
-        None => "?".to_string(),
-    }
-}
-
-fn status(client: &mut Headset) -> Result<()> {
-    let s = read_all(client)?;
-    let on = |key| match s.flag(key) {
-        Some(true) => "on",
-        Some(false) => "off",
-        None => "?",
-    };
-    let num = |key| s.int(key).map_or("?".to_string(), |v| v.to_string());
-
-    println!("Firmware      {}", s.text(keys::FIRMWARE).unwrap_or("?"));
-    let battery = s.battery().map_or("unknown".to_string(), |b| format!("{b}%"));
-    let charging = if s.flag(keys::CHARGING) == Some(true) { ", charging" } else { "" };
-    println!("Headset       {}: battery {battery}{charging}", s.text(keys::NAME).unwrap_or("?"));
-
-    let tx: Vec<String> = s
-        .transmitters()
-        .iter()
-        .filter(|t| t.state != TransmitterState::Empty)
-        .map(|t| {
-            let state = match t.state {
-                TransmitterState::Active => "active".to_string(),
-                TransmitterState::Standby => "standby".to_string(),
-                TransmitterState::Empty => "empty".to_string(),
-                TransmitterState::Unknown(n) => format!("state {n}"),
-            };
-            format!("TX{} 10f5:{} {state}", t.slot, t.product_id.to_lowercase())
-        })
-        .collect();
-    println!("Transmitters  {}", if tx.is_empty() { "none".to_string() } else { tx.join(", ") });
-    println!("Volume        {}", num(keys::VOLUME));
-
-    for eq in [&keys::GAME_EQ, &keys::MIC_EQ] {
-        let e = s.equalizer(eq);
-        let bands: Vec<String> = e.bands.iter().map(|b| b.map_or("?".into(), |v| format!("{:+.1}", v as f64 / 10.0))).collect();
-        let label = if eq.preset == keys::GAME_EQ_PRESET { "Game EQ" } else { "Mic EQ" };
-        println!("{label:<13} {}  [{}] dB", preset_name(eq, &s, e.preset), bands.join(" "));
-    }
-    let mode = s.int(keys::SUPERHUMAN_MODE).and_then(|m| keys::SUPERHUMAN_MODES.get(m as usize).copied()).unwrap_or("?");
-    println!("Superhuman    {} ({mode}, level {})", on(keys::SUPERHUMAN_HEARING), num(keys::SUPERHUMAN_LEVEL));
-    println!("ANC           {} (level {}: 0 ambient … 100 full ANC)", on(keys::ANC), num(keys::ANC_LEVEL));
-    let muted = if s.flag(keys::MIC_MUTED) == Some(true) { "muted" } else { "live" };
-    println!("Mic           {muted}, sensitivity {}, A.I. noise reduction {}", num(keys::MIC_SENSITIVITY), on(keys::AI_NOISE_REDUCTION));
-    println!("Noise gate    {} (level {})", on(keys::NOISE_GATE), num(keys::NOISE_GATE_LEVEL));
-    println!("Monitoring    level {} (enabled: {})", num(keys::MONITORING_LEVEL), on(keys::MONITORING_ENABLE));
-    let pick = |key, options: &[(i64, &'static str)]| {
-        s.int(key).and_then(|v| options.iter().find(|(n, _)| *n == v)).map_or("?", |(_, label)| *label)
-    };
-    println!("Button        {}", pick(keys::BUTTON_FUNCTION, &keys::BUTTON_FUNCTIONS));
-    println!("Wheel         {}", pick(keys::WHEEL_FUNCTION, &keys::WHEEL_FUNCTIONS));
-    println!(
-        "Power         auto shut-off {}, wake on motion {}",
-        pick(keys::AUTO_SHUTOFF, &keys::AUTO_SHUTOFF_OPTIONS),
-        on(keys::WAKE_ON_MOTION)
-    );
-    if let Some(control) = s.raw(keys::TRANSMITTERS[0]).and_then(|v| v.get("control")).and_then(Value::as_array) {
-        let led = |i: usize| control.get(i).and_then(Value::as_str).unwrap_or("?").to_string();
-        println!("Charging hub  LED 1 {}, LED 2 {}", led(1), led(2));
-    }
-    Ok(())
-}
-
-fn watch(client: &mut Headset, limit: Option<Duration>) -> Result<()> {
-    let mut state = read_all(client)?;
+fn watch(b: &mut Backend, limit: Option<Duration>) -> Result<()> {
     let start = Instant::now();
-    eprintln!("watching; Ctrl-C to stop");
-    while limit.is_none_or(|l| start.elapsed() < l) {
-        for doc in client.wait_updates(Duration::from_millis(500))? {
-            let before = state.clone();
-            for key in state.apply(&doc) {
-                let old = before.raw(key).map_or("-".to_string(), show_value);
-                let new = state.raw(key).map_or("-".to_string(), show_value);
-                println!("{:8.1}s  {:4} {}: {old} -> {new}", start.elapsed().as_secs_f64(), doc.record, describe_key(&format!("{key:x}")));
+    match b {
+        Backend::Daemon(d) => {
+            eprintln!("watching through stealthd; Ctrl-C to stop");
+            for changed in d.changes()? {
+                for (name, value) in changed {
+                    println!("{:8.1}s  {name} = {}", start.elapsed().as_secs_f64(), show_typed(&value));
+                }
+                if limit.is_some_and(|l| start.elapsed() >= l) {
+                    break;
+                }
+            }
+        }
+        Backend::Direct(client) => {
+            let mut state = read_all(client)?;
+            eprintln!("watching; Ctrl-C to stop");
+            while limit.is_none_or(|l| start.elapsed() < l) {
+                for doc in client.wait_updates(Duration::from_millis(500))? {
+                    let before = state.clone();
+                    for key in state.apply(&doc) {
+                        let old = before.raw(key).map_or("-".to_string(), show_json);
+                        let new = state.raw(key).map_or("-".to_string(), show_json);
+                        let k = format!("{key:x}");
+                        println!("{:8.1}s  {:4} {}: {old} -> {new}", start.elapsed().as_secs_f64(), doc.record, describe_key(&k));
+                    }
+                }
             }
         }
     }
     Ok(())
 }
 
-fn restore(client: &mut Headset, file: &PathBuf) -> Result<()> {
+fn restore(client: &mut Device, file: &PathBuf) -> Result<()> {
     let snap: Value = serde_json::from_str(&fs::read_to_string(file)?)?;
     let saved = |key: u16| -> Option<i64> {
         snap.as_object()?.values().find_map(|kvp| kvp.get(format!("{key:x}"))?.as_str()?.parse().ok())
@@ -549,10 +674,11 @@ fn restore(client: &mut Headset, file: &PathBuf) -> Result<()> {
         println!("already matches the snapshot");
         return Ok(());
     }
-    for (key, value) in &todo {
+    for &(key, value) in &todo {
         println!("{} -> {value}", describe_key(&format!("{key:x}")));
+        client.set(key, value).with_context(|| format!("writing {key:#x} = {value}"))?;
     }
-    write(client, &todo)
+    show_updates(client)
 }
 
 fn describe_key(hex: &str) -> String {
@@ -562,9 +688,19 @@ fn describe_key(hex: &str) -> String {
     }
 }
 
-fn show_value(v: &Value) -> String {
+fn show_json(v: &Value) -> String {
     match v {
         Value::String(s) => s.clone(),
         other => other.to_string(),
+    }
+}
+
+fn show_typed(v: &Typed) -> String {
+    match v {
+        Typed::Bool(b) => b.to_string(),
+        Typed::Int(n) => n.to_string(),
+        Typed::Text(s) => s.clone(),
+        Typed::Ints(list) => format!("{list:?}"),
+        Typed::Texts(list) => format!("{list:?}"),
     }
 }

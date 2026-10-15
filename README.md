@@ -25,6 +25,28 @@ tunnels a JSON key/value protocol through them. This project speaks that protoco
 | `10f5:2289` | Stealth Pro II PC headset on its USB-C cable (seen) |
 | `10f5:229e` | Stealth Pro II headset on its USB-C cable (other SKU, from HaloBattery) |
 
+## stealthd (background service)
+
+`stealthd` owns the headset: it finds it (preferring the transmitter over the headset's own cable), keeps a session
+with every record subscribed, follows unplugging, and serves everything on the session bus. It also shows a
+notification when the battery drops to 15 % and 5 %.
+
+```sh
+packaging/install-user.sh      # installs stealthctl + stealthd to ~/.local/bin and enables the user service
+```
+
+D-Bus: `io.github.swarm2linux.Stealthd`, object `/io/github/swarm2linux/Headset`, interface
+`io.github.swarm2linux.Headset1` with `Values() -> a{sv}`, `Set(s, v)`, `SetBand(s, u, i)`, `SavePreset(s, s)`,
+`DeletePreset(s, s)` and the signal `Changed(a{sv})`. Value names are listed in `crates/tb-proto/src/values.rs`.
+
+```sh
+busctl --user call io.github.swarm2linux.Stealthd /io/github/swarm2linux/Headset \
+    io.github.swarm2linux.Headset1 Set sv anc b true
+```
+
+When `stealthd` runs, `stealthctl` goes through it; the raw commands (`dump`, `get`, `set`, `snapshot`, `restore`)
+need direct access and ask you to stop the service first.
+
 ## stealthctl
 
 ```sh

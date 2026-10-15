@@ -1,5 +1,5 @@
 [workspace]
-members = ["crates/race-hid", "crates/tb-proto", "crates/stealthctl"]
+members = ["crates/race-hid", "crates/tb-proto", "crates/stealth-dbus", "crates/stealthctl", "crates/stealthd"]
 resolver = "3"
 
 [workspace.package]
@@ -10,6 +10,8 @@ publish = false
 [workspace.dependencies]
 race-hid = { path = "crates/race-hid" }
 tb-proto = { path = "crates/tb-proto" }
+stealth-dbus = { path = "crates/stealth-dbus" }
+zbus = "5"
 anyhow = "1"
 clap = { version = "4", features = ["derive"] }
 libc = "0.2"

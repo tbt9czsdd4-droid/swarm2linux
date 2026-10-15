@@ -6,6 +6,7 @@ mod doc;
 mod frame;
 pub mod keys;
 mod state;
+pub mod values;
 
 pub use client::{Client, open};
 pub use doc::{DocKind, Document};
@@ -31,6 +32,8 @@ pub enum Error {
     Nack(u16),
     #[error("unexpected answer to {0}")]
     BadReply(String),
+    #[error("{0}")]
+    Preset(String),
 }
 
 pub type Result<T> = std::result::Result<T, Error>;

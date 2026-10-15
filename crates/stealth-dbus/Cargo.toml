@@ -1,0 +1,10 @@
+[package]
+name = "stealth-dbus"
+description = "D-Bus names, value conversions and a blocking client for stealthd"
+version.workspace = true
+edition.workspace = true
+publish.workspace = true
+
+[dependencies]
+tb-proto.workspace = true
+zbus.workspace = true

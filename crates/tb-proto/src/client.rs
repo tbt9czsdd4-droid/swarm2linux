@@ -8,7 +8,7 @@ use serde_json::Value;
 
 use crate::doc::Document;
 use crate::frame::{CMD_KVP, Message, MessageKind, Request, Token};
-use crate::{Error, READ_ONCE, Result, keys};
+use crate::{Error, READ_ONCE, Result, State, keys};
 
 /// Talks to one transmitter or headset.
 ///
@@ -136,6 +136,31 @@ impl<T: ReportIo> Client<T> {
         self.set_text(eq.delete, name)
     }
 
+    /// Save the current bands (as known in `state`) as a new custom preset in the first free slot.
+    pub fn save_new_preset(&mut self, state: &State, eq: &keys::EqKeys, name: &str) -> Result<()> {
+        if state.custom_presets(eq).iter().any(|p| p.name.eq_ignore_ascii_case(name)) {
+            return Err(Error::Preset(format!("a {} preset called {name:?} already exists", eq.what)));
+        }
+        let slot = state
+            .free_custom_slot(eq)
+            .ok_or_else(|| Error::Preset("all 5 custom preset slots are in use".into()))?;
+        let mut bands = [0i64; keys::BAND_COUNT];
+        for (i, b) in state.equalizer(eq).bands.iter().enumerate() {
+            bands[i] = b.ok_or_else(|| Error::Preset(format!("the current {} bands are not known", eq.what)))?;
+        }
+        self.save_preset(eq, slot, &bands, name)
+    }
+
+    /// Delete the custom preset called `name` (case-insensitive), as known in `state`.
+    pub fn delete_named_preset(&mut self, state: &State, eq: &keys::EqKeys, name: &str) -> Result<()> {
+        let preset = state
+            .custom_presets(eq)
+            .into_iter()
+            .find(|p| p.name.eq_ignore_ascii_case(name))
+            .ok_or_else(|| Error::Preset(format!("no custom {} preset called {name:?}", eq.what)))?;
+        self.delete_preset(eq, &preset.name)
+    }
+
     fn write_kvp(&mut self, key: u16, value: &str) -> Result<()> {
         let json = serde_json::json!({ format!("{key:#x}"): value }).to_string();
         let reply = self.transact(&Request::SetKvp(json))?;
@@ -148,6 +173,16 @@ impl<T: ReportIo> Client<T> {
         while Instant::now() < end {
             if !self.pump()? {
                 sleep(self.poll_interval.min(end.saturating_duration_since(Instant::now())));
+            }
+        }
+        Ok(self.take_updates())
+    }
+
+    /// Read whatever the device has queued (without waiting) and return the pushed documents.
+    pub fn poll(&mut self) -> Result<Vec<Document>> {
+        for _ in 0..64 {
+            if !self.pump()? {
+                break;
             }
         }
         Ok(self.take_updates())
