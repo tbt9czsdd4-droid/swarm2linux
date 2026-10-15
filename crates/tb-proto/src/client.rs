@@ -23,6 +23,7 @@ pub struct Client<T: ReportIo> {
     last: Token,
     updates: VecDeque<Document>,
     link: Option<bool>,
+    link_came_up: bool,
     /// Pause between polls while the device has nothing to say.
     pub poll_interval: Duration,
     /// How long to wait for a reply.
@@ -43,6 +44,8 @@ pub fn open(path: Option<&Path>) -> Result<Client<HidrawDevice>> {
     let mut client = Client::new(HidrawDevice::open(path)?);
     client.drain()?;
     client.subscribe("Inf")?;
+    // link indications found in the stale queue are history, not a reconnect to react to
+    client.link_came_up = false;
     Ok(client)
 }
 
@@ -61,6 +64,7 @@ impl<T: ReportIo> Client<T> {
             last,
             updates: VecDeque::new(),
             link: None,
+            link_came_up: false,
             poll_interval: Duration::from_millis(60),
             timeout: Duration::from_secs(2),
             retries: 1,
@@ -199,6 +203,32 @@ impl<T: ReportIo> Client<T> {
         self.link
     }
 
+    /// Whether the headset's link came (back) up since the last call. The headset forgets every subscription
+    /// when it restarts, so this is the cue to call [`Client::subscribe_all`] again.
+    pub fn take_link_up(&mut self) -> bool {
+        std::mem::take(&mut self.link_came_up)
+    }
+
+    /// Subscribe to every record the device lists and return the state they describe, with a note for each
+    /// record that did not answer.
+    pub fn subscribe_all(&mut self) -> Result<(State, Vec<String>)> {
+        let mut state = State::new();
+        let mut problems = Vec::new();
+        for record in self.index()? {
+            match self.subscribe(&record) {
+                Ok(doc) => {
+                    state.apply(&doc);
+                }
+                Err(e @ (Error::Timeout(_) | Error::BadReply(_))) => problems.push(format!("{record}: {e}")),
+                Err(e) => return Err(e),
+            }
+        }
+        for doc in self.take_updates() {
+            state.apply(&doc);
+        }
+        Ok((state, problems))
+    }
+
     /// Pushed documents received so far.
     pub fn take_updates(&mut self) -> Vec<Document> {
         self.updates.drain(..).collect()
@@ -253,7 +283,11 @@ impl<T: ReportIo> Client<T> {
         for packet in self.reasm.feed(&report) {
             if packet.cmd == CMD_LINK && packet.kind == RaceType::Indication && packet.payload.len() > 2 {
                 // 00 02 <01 up | 00 down> 01 <headset address, 6 bytes> ...
-                self.link = Some(packet.payload[2] == 1);
+                let up = packet.payload[2] == 1;
+                if up && self.link != Some(true) {
+                    self.link_came_up = true;
+                }
+                self.link = Some(up);
                 continue;
             }
             if packet.cmd != CMD_KVP {
@@ -406,9 +440,12 @@ mod tests {
         c.io.queue.push_back(hex("071200055d0e00b12c00020001933492edcac7ff00"));
         c.poll().unwrap();
         assert_eq!(c.headset_link(), Some(false));
+        assert!(!c.take_link_up());
         c.io.queue.push_back(hex("071200055d0e00b12c00020101933492edcac78001"));
         c.poll().unwrap();
         assert_eq!(c.headset_link(), Some(true));
+        assert!(c.take_link_up());
+        assert!(!c.take_link_up());
     }
 
     #[test]

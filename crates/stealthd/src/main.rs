@@ -28,6 +28,9 @@ use zbus::{fdo, interface};
 const IDLE_POLL: Duration = Duration::from_millis(200);
 /// How often to look for a device while none is connected.
 const SCAN_INTERVAL: Duration = Duration::from_secs(2);
+/// After the headset's link came back: how long to wait before subscribing again, and how often to try.
+const RESUBSCRIBE_DELAY: Duration = Duration::from_millis(1500);
+const RESUBSCRIBE_TRIES: u32 = 5;
 /// How long to wait for the headset's pushes after a write, and the quiet time that ends them early.
 const PUSH_WAIT: Duration = Duration::from_millis(800);
 const PUSH_QUIET: Duration = Duration::from_millis(150);
@@ -181,19 +184,13 @@ impl Daemon {
     /// Serve one device until it goes away.
     fn run(&mut self, path: &PathBuf, label: &str) -> Result<()> {
         let mut client = tb_proto::open(Some(path))?;
-        let mut state = State::new();
-        for record in client.index()? {
-            match client.subscribe(&record) {
-                Ok(doc) => {
-                    state.apply(&doc);
-                }
-                Err(e) => eprintln!("stealthd: {record}: {e}"),
-            }
-        }
-        for doc in client.take_updates() {
-            state.apply(&doc);
+        let (mut state, problems) = client.subscribe_all()?;
+        for p in problems {
+            eprintln!("stealthd: {p}");
         }
         self.publish(Some(label.to_string()), &state, client.headset_link());
+        // when to subscribe again after the headset came back, and how many tries are left
+        let mut resubscribe: Option<(Instant, u32)> = None;
 
         loop {
             match self.queue.recv_timeout(IDLE_POLL) {
@@ -219,6 +216,31 @@ impl Daemon {
                     state.apply(doc);
                 }
                 self.publish(Some(label.to_string()), &state, client.headset_link());
+            }
+            if client.take_link_up() {
+                // the headset restarted and forgot every subscription; give it a moment to settle
+                resubscribe = Some((Instant::now() + RESUBSCRIBE_DELAY, RESUBSCRIBE_TRIES));
+            }
+            if let Some((when, tries)) = resubscribe
+                && Instant::now() >= when
+            {
+                match client.subscribe_all() {
+                    Ok((fresh, problems)) if problems.is_empty() || tries <= 1 => {
+                        eprintln!("stealthd: headset back, subscribed again");
+                        state = fresh;
+                        resubscribe = None;
+                        self.publish(Some(label.to_string()), &state, client.headset_link());
+                    }
+                    Ok((_, problems)) => {
+                        eprintln!("stealthd: headset not ready yet ({}), trying again", problems.join("; "));
+                        resubscribe = Some((Instant::now() + RESUBSCRIBE_DELAY, tries - 1));
+                    }
+                    Err(e @ tb_proto::Error::Timeout(_)) if tries > 1 => {
+                        eprintln!("stealthd: headset not ready yet ({e}), trying again");
+                        resubscribe = Some((Instant::now() + RESUBSCRIBE_DELAY, tries - 1));
+                    }
+                    Err(e) => return Err(e.into()),
+                }
             }
         }
     }

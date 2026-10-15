@@ -405,17 +405,9 @@ fn devices() -> Result<()> {
 
 /// Subscribe to every record the device lists.
 fn read_all(client: &mut Device) -> Result<State> {
-    let mut state = State::new();
-    for record in client.index()? {
-        match client.subscribe(&record) {
-            Ok(doc) => {
-                state.apply(&doc);
-            }
-            Err(e) => eprintln!("warning: {record}: {e}"),
-        }
-    }
-    for doc in client.take_updates() {
-        state.apply(&doc);
+    let (state, problems) = client.subscribe_all()?;
+    for p in problems {
+        eprintln!("warning: {p}");
     }
     Ok(state)
 }
@@ -636,6 +628,12 @@ fn watch(b: &mut Backend, limit: Option<Duration>) -> Result<()> {
                     link = client.headset_link();
                     let what = if link == Some(true) { "up" } else { "down" };
                     println!("{:8.1}s  headset link {what}", start.elapsed().as_secs_f64());
+                }
+                if client.take_link_up() {
+                    // the headset restarted and forgot the subscriptions
+                    std::thread::sleep(Duration::from_millis(1500));
+                    state = read_all(client)?;
+                    println!("{:8.1}s  subscribed again", start.elapsed().as_secs_f64());
                 }
                 for doc in docs {
                     let before = state.clone();
