@@ -1,0 +1,78 @@
+// The headset as the UI sees it, and the only contract between the .slint files and Rust.
+// Property names are the value names of tb_proto::values (kebab-case here); Rust fills them from stealthd.
+
+export struct Choice {
+    value: int,
+    label: string,
+}
+
+export global Headset {
+    // stealthd and the device
+    in-out property <bool> daemon-running;
+    in-out property <bool> connected;
+    in-out property <string> device;
+    in-out property <bool> headset-link;
+
+    // status
+    in-out property <string> name;
+    in-out property <string> firmware;
+    in-out property <int> battery: -1;
+    in-out property <bool> charging;
+    in-out property <int> volume;
+    in-out property <bool> mic-muted;
+    in-out property <[string]> transmitters;
+    in-out property <int> active-transmitter;
+
+    // settings
+    in-out property <bool> anc;
+    in-out property <int> anc-level;
+    in-out property <bool> superhuman;
+    in-out property <int> superhuman-mode;
+    in-out property <int> superhuman-level;
+    in-out property <int> mic-sensitivity;
+    in-out property <int> monitoring-level;
+    in-out property <bool> monitoring-enabled;
+    in-out property <bool> noise-gate;
+    in-out property <int> noise-gate-level;
+    in-out property <bool> ai-noise-reduction;
+    in-out property <int> button-function;
+    in-out property <int> wheel-function;
+    in-out property <int> auto-shutoff;
+    in-out property <bool> wake-on-motion;
+    in-out property <int> hub-led-1;
+    in-out property <int> hub-led-2;
+
+    // equalizers: preset 0 = custom bands, 1-4 onboard, 16-20 the custom slots; bands in tenths of a dB
+    in-out property <int> game-eq-preset;
+    in-out property <string> game-eq-name;
+    in-out property <[int]> game-eq-bands: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+    in-out property <[string]> game-eq-slots: ["", "", "", "", ""];
+    in-out property <int> mic-eq-preset;
+    in-out property <string> mic-eq-name;
+    in-out property <[int]> mic-eq-bands: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+    in-out property <[string]> mic-eq-slots: ["", "", "", "", ""];
+
+    // option lists, filled from tb_proto::keys
+    in property <[Choice]> superhuman-modes;
+    in property <[Choice]> button-functions;
+    in property <[Choice]> wheel-functions;
+    in property <[Choice]> auto-shutoff-options;
+    in property <[Choice]> game-eq-presets;
+    in property <[Choice]> mic-eq-presets;
+    in property <[string]> game-eq-frequencies;
+    in property <[string]> mic-eq-frequencies;
+
+    // whether settings can be changed now
+    out property <bool> available: daemon-running && connected && headset-link;
+
+    // the last failed write, shown as a toast
+    in-out property <string> error;
+
+    // writes go to stealthd; names are value names in snake_case ("anc_level"), eq is "game" or "mic"
+    callback set-bool(name: string, value: bool);
+    callback set-int(name: string, value: int);
+    callback set-band(eq: string, band: int, tenths: int);
+    callback save-preset(eq: string, name: string);
+    callback delete-preset(eq: string, name: string);
+    pure callback valid-preset-name(name: string) -> bool;
+}

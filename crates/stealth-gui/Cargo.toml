@@ -1,0 +1,24 @@
+[package]
+name = "stealth-gui"
+description = "Desktop app for the Turtle Beach Stealth Pro II on Linux, a client of stealthd"
+version.workspace = true
+edition.workspace = true
+publish.workspace = true
+
+[dependencies]
+anyhow.workspace = true
+png = "0.18"
+slint = { version = "1.18", default-features = false, features = [
+    "std",
+    "backend-winit",
+    "renderer-femtovg",
+    "accessibility",
+    "compat-1-2",
+    "system-tray",
+] }
+stealth-dbus.workspace = true
+tb-proto.workspace = true
+zbus.workspace = true
+
+[build-dependencies]
+slint-build = "1.18"

@@ -54,6 +54,43 @@ const SIMPLE: &[(&str, u16, Kind)] = &[
     ("mic_eq_name", keys::MIC_EQ_NAME, Kind::Text),
 ];
 
+/// Every name [`values`] can return.
+pub const NAMES: &[&str] = &[
+    "name",
+    "firmware",
+    "charging",
+    "volume",
+    "active_transmitter",
+    "mic_muted",
+    "mic_sensitivity",
+    "monitoring_level",
+    "monitoring_enabled",
+    "ai_noise_reduction",
+    "noise_gate",
+    "noise_gate_level",
+    "superhuman",
+    "superhuman_mode",
+    "superhuman_level",
+    "anc",
+    "anc_level",
+    "button_function",
+    "wheel_function",
+    "auto_shutoff",
+    "wake_on_motion",
+    "game_eq_preset",
+    "game_eq_name",
+    "mic_eq_preset",
+    "mic_eq_name",
+    "battery",
+    "game_eq_bands",
+    "mic_eq_bands",
+    "game_eq_slots",
+    "mic_eq_slots",
+    "transmitters",
+    "hub_led_1",
+    "hub_led_2",
+];
+
 /// Every value known in `state`, by name. Values whose keys have not been seen are left out.
 ///
 /// Besides the simple ones: `battery` (-1 while unknown), `game_eq_bands` / `mic_eq_bands` (10 values in tenths
@@ -158,6 +195,8 @@ mod tests {
         assert_eq!(v["hub_led_1"], Typed::Int(40));
         assert_eq!(v["game_eq_bands"], Typed::Ints(vec![0, 0, 0, 0, 0, 0, 0, 0, 0, 5]));
         assert!(!v.contains_key("mic_eq_bands"));
+        assert!(v.keys().all(|k| NAMES.contains(k)));
+        assert!(SIMPLE.iter().all(|(n, _, _)| NAMES.contains(n)));
 
         assert_eq!(to_write("anc", &Typed::Bool(false)), Some((keys::ANC, 0)));
         assert_eq!(to_write("hub_led_2", &Typed::Int(10)), Some((keys::HUB_LED_2, 10)));

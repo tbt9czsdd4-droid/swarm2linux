@@ -1,0 +1,33 @@
+import { Headset, Choice } from "state.slint";
+
+export { Headset, Choice }
+
+export component AppWindow inherits Window {
+    title: "swarm2linux";
+    preferred-width: 1200px;
+    preferred-height: 780px;
+    min-width: 900px;
+    min-height: 640px;
+    background: #111419;
+
+    VerticalLayout {
+        padding: 24px;
+        spacing: 8px;
+        alignment: start;
+        for line in [
+            "stealthd: " + (Headset.daemon-running ? "running" : "not running"),
+            "device: " + (Headset.connected ? Headset.device : "none"),
+            "headset link: " + (Headset.headset-link ? "up" : "down"),
+            "name: " + Headset.name,
+            "battery: " + (Headset.battery < 0 ? "unknown" : Headset.battery + "%") + (Headset.charging ? " (charging)" : ""),
+            "firmware: " + Headset.firmware,
+            "ANC: " + (Headset.anc ? "on" : "off") + ", level " + Headset.anc-level,
+            "game EQ preset: " + Headset.game-eq-preset + " " + Headset.game-eq-name,
+            "error: " + Headset.error,
+        ]: Text {
+            text: line;
+            color: #e8eaed;
+            font-size: 15px;
+        }
+    }
+}

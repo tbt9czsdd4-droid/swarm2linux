@@ -7,7 +7,7 @@
 //! `io.github.swarm2linux.Headset1`. Value names are those of `tb_proto::values`.
 
 use std::collections::{BTreeMap, HashMap};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::mpsc::{self, RecvTimeoutError};
 use std::sync::{Arc, Mutex};
 use std::thread::sleep;
@@ -182,7 +182,7 @@ struct Daemon {
 
 impl Daemon {
     /// Serve one device until it goes away.
-    fn run(&mut self, path: &PathBuf, label: &str) -> Result<()> {
+    fn run(&mut self, path: &Path, label: &str) -> Result<()> {
         let mut client = tb_proto::open(Some(path))?;
         let (mut state, problems) = client.subscribe_all()?;
         for p in problems {

@@ -1,0 +1,137 @@
+//! Values from stealthd into the `Headset` global, and the option lists from `tb_proto::keys`.
+
+use std::collections::BTreeMap;
+
+use slint::{ModelRc, SharedString, VecModel};
+use tb_proto::keys;
+use tb_proto::values::Typed;
+
+use crate::{Choice, Headset};
+
+/// Where a value goes in the `Headset` global.
+#[derive(Clone, Copy)]
+enum Target {
+    Bool(fn(&Headset<'_>, bool)),
+    Int(fn(&Headset<'_>, i32)),
+    Text(fn(&Headset<'_>, SharedString)),
+    Ints(fn(&Headset<'_>, ModelRc<i32>)),
+    Texts(fn(&Headset<'_>, ModelRc<SharedString>)),
+}
+
+fn target(name: &str) -> Option<Target> {
+    use Target::*;
+    Some(match name {
+        "connected" => Bool(|h, v| h.set_connected(v)),
+        "device" => Text(|h, v| h.set_device(v)),
+        "headset_link" => Bool(|h, v| h.set_headset_link(v)),
+        "name" => Text(|h, v| h.set_name(v)),
+        "firmware" => Text(|h, v| h.set_firmware(v)),
+        "battery" => Int(|h, v| h.set_battery(v)),
+        "charging" => Bool(|h, v| h.set_charging(v)),
+        "volume" => Int(|h, v| h.set_volume(v)),
+        "mic_muted" => Bool(|h, v| h.set_mic_muted(v)),
+        "transmitters" => Texts(|h, v| h.set_transmitters(v)),
+        "active_transmitter" => Int(|h, v| h.set_active_transmitter(v)),
+        "anc" => Bool(|h, v| h.set_anc(v)),
+        "anc_level" => Int(|h, v| h.set_anc_level(v)),
+        "superhuman" => Bool(|h, v| h.set_superhuman(v)),
+        "superhuman_mode" => Int(|h, v| h.set_superhuman_mode(v)),
+        "superhuman_level" => Int(|h, v| h.set_superhuman_level(v)),
+        "mic_sensitivity" => Int(|h, v| h.set_mic_sensitivity(v)),
+        "monitoring_level" => Int(|h, v| h.set_monitoring_level(v)),
+        "monitoring_enabled" => Bool(|h, v| h.set_monitoring_enabled(v)),
+        "noise_gate" => Bool(|h, v| h.set_noise_gate(v)),
+        "noise_gate_level" => Int(|h, v| h.set_noise_gate_level(v)),
+        "ai_noise_reduction" => Bool(|h, v| h.set_ai_noise_reduction(v)),
+        "button_function" => Int(|h, v| h.set_button_function(v)),
+        "wheel_function" => Int(|h, v| h.set_wheel_function(v)),
+        "auto_shutoff" => Int(|h, v| h.set_auto_shutoff(v)),
+        "wake_on_motion" => Bool(|h, v| h.set_wake_on_motion(v)),
+        "hub_led_1" => Int(|h, v| h.set_hub_led_1(v)),
+        "hub_led_2" => Int(|h, v| h.set_hub_led_2(v)),
+        "game_eq_preset" => Int(|h, v| h.set_game_eq_preset(v)),
+        "game_eq_name" => Text(|h, v| h.set_game_eq_name(v)),
+        "game_eq_bands" => Ints(|h, v| h.set_game_eq_bands(v)),
+        "game_eq_slots" => Texts(|h, v| h.set_game_eq_slots(v)),
+        "mic_eq_preset" => Int(|h, v| h.set_mic_eq_preset(v)),
+        "mic_eq_name" => Text(|h, v| h.set_mic_eq_name(v)),
+        "mic_eq_bands" => Ints(|h, v| h.set_mic_eq_bands(v)),
+        "mic_eq_slots" => Texts(|h, v| h.set_mic_eq_slots(v)),
+        _ => return None,
+    })
+}
+
+/// Show values from stealthd: all of them, or the changed ones.
+pub fn apply(h: &Headset<'_>, values: &BTreeMap<String, Typed>) {
+    for (name, value) in values {
+        match (target(name), value) {
+            (Some(Target::Bool(set)), Typed::Bool(v)) => set(h, *v),
+            (Some(Target::Int(set)), Typed::Int(v)) => set(h, *v as i32),
+            (Some(Target::Text(set)), Typed::Text(v)) => set(h, v.into()),
+            (Some(Target::Ints(set)), Typed::Ints(v)) => set(h, ints(v)),
+            (Some(Target::Texts(set)), Typed::Texts(v)) => set(h, texts(v)),
+            // an empty list cannot say what it holds and arrives as integers
+            (Some(Target::Texts(set)), Typed::Ints(v)) if v.is_empty() => set(h, texts::<&str>(&[])),
+            _ => eprintln!("stealth-gui: ignoring {name} = {value:?}"),
+        }
+    }
+}
+
+/// Fill the option lists.
+pub fn init(h: &Headset<'_>) {
+    let modes = keys::SUPERHUMAN_MODES.iter().enumerate().map(|(i, &label)| (i as i64, label));
+    h.set_superhuman_modes(choices(modes));
+    h.set_button_functions(choices(keys::BUTTON_FUNCTIONS));
+    h.set_wheel_functions(choices(keys::WHEEL_FUNCTIONS));
+    h.set_auto_shutoff_options(choices(keys::AUTO_SHUTOFF_OPTIONS));
+    h.set_game_eq_presets(choices(keys::GAME_EQ.presets));
+    h.set_mic_eq_presets(choices(keys::MIC_EQ.presets));
+    h.set_game_eq_frequencies(texts(&keys::GAME_EQ.frequencies));
+    h.set_mic_eq_frequencies(texts(&keys::MIC_EQ.frequencies));
+}
+
+/// Whether the headset takes `name` as a custom preset name.
+pub fn valid_preset_name(name: &str) -> bool {
+    keys::writable(keys::GAME_EQ_NAME).is_some_and(|s| s.values.accepts_text(name))
+}
+
+fn choices(list: impl IntoIterator<Item = (i64, &'static str)>) -> ModelRc<Choice> {
+    let items: Vec<Choice> =
+        list.into_iter().map(|(value, label)| Choice { value: value as i32, label: capitalized(label).into() }).collect();
+    ModelRc::new(VecModel::from(items))
+}
+
+fn capitalized(s: &str) -> String {
+    let mut chars = s.chars();
+    chars.next().map(|c| c.to_uppercase().chain(chars).collect()).unwrap_or_default()
+}
+
+fn ints(list: &[i64]) -> ModelRc<i32> {
+    ModelRc::new(VecModel::from(list.iter().map(|&n| n as i32).collect::<Vec<_>>()))
+}
+
+fn texts<S: AsRef<str>>(list: &[S]) -> ModelRc<SharedString> {
+    ModelRc::new(VecModel::from(list.iter().map(|s| SharedString::from(s.as_ref())).collect::<Vec<_>>()))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn every_value_has_a_place() {
+        for name in tb_proto::values::NAMES.iter().chain(stealth_dbus::DAEMON_NAMES.iter()) {
+            assert!(target(name).is_some(), "{name} is not shown");
+        }
+    }
+
+    #[test]
+    fn labels_and_names() {
+        assert_eq!(capitalized("never"), "Never");
+        assert_eq!(capitalized(""), "");
+        assert!(valid_preset_name("My Preset"));
+        assert!(!valid_preset_name(""));
+        assert!(!valid_preset_name("a name that is far too long"));
+        assert!(!valid_preset_name("quote\""));
+    }
+}

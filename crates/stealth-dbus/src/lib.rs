@@ -10,6 +10,8 @@
 //! - `SavePreset(s eq, s name)`, `DeletePreset(s eq, s name)`: custom EQ presets
 //! - signal `Changed(a{sv})`: the values that changed
 //! - property `Connected` (b)
+//!
+//! Besides the names of `tb_proto::values::NAMES`, `Values` and `Changed` carry [`DAEMON_NAMES`].
 
 use std::collections::{BTreeMap, HashMap};
 
@@ -20,6 +22,10 @@ use zbus::zvariant::{OwnedValue, Value};
 pub const BUS_NAME: &str = "io.github.swarm2linux.Stealthd";
 pub const PATH: &str = "/io/github/swarm2linux/Headset";
 pub const INTERFACE: &str = "io.github.swarm2linux.Headset1";
+
+/// Values that come from the daemon rather than the headset's records: whether a device is connected, its label,
+/// and whether the headset's radio link is up.
+pub const DAEMON_NAMES: [&str; 3] = ["connected", "device", "headset_link"];
 
 /// The D-Bus form of a value.
 pub fn to_value(v: &Typed) -> Value<'static> {
@@ -65,21 +71,36 @@ fn to_map(raw: HashMap<String, OwnedValue>) -> BTreeMap<String, Typed> {
     raw.into_iter().filter_map(|(k, v)| from_value(&v).map(|t| (k, t))).collect()
 }
 
-/// A blocking client for a running `stealthd`.
+/// A blocking client for `stealthd`.
+#[derive(Clone)]
 pub struct DaemonClient {
     proxy: Proxy<'static>,
 }
 
 impl DaemonClient {
+    /// A client for `stealthd` whether or not it is running now. Calls fail while it is not; signals start
+    /// arriving once it is.
+    pub fn new() -> zbus::Result<Self> {
+        let conn = Connection::session()?;
+        let proxy = Proxy::new_owned(conn, BUS_NAME, PATH, INTERFACE)?;
+        Ok(Self { proxy })
+    }
+
     /// Connect to `stealthd` if it is running on the session bus.
     pub fn connect() -> zbus::Result<Option<Self>> {
-        let conn = Connection::session()?;
-        let dbus = zbus::blocking::fdo::DBusProxy::new(&conn)?;
-        if !dbus.name_has_owner(BUS_NAME.try_into()?)? {
-            return Ok(None);
-        }
-        let proxy = Proxy::new_owned(conn, BUS_NAME, PATH, INTERFACE)?;
-        Ok(Some(Self { proxy }))
+        let client = Self::new()?;
+        Ok(client.running()?.then_some(client))
+    }
+
+    /// Whether `stealthd` is running.
+    pub fn running(&self) -> zbus::Result<bool> {
+        let dbus = zbus::blocking::fdo::DBusProxy::new(self.proxy.connection())?;
+        Ok(dbus.name_has_owner(BUS_NAME.try_into()?)?)
+    }
+
+    /// Whether `stealthd` is running, each time that changes (blocks between changes).
+    pub fn owner_changes(&self) -> zbus::Result<impl Iterator<Item = bool> + '_> {
+        Ok(self.proxy.receive_owner_changed()?.map(|owner| owner.is_some()))
     }
 
     /// Every known value, plus `connected` and `device`.
