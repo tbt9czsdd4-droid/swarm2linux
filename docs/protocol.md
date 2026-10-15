@@ -143,13 +143,13 @@ Writes marked ✎ were seen from Swarm II, with the values it used.
 | 250 | `0` | charging `0`/`1` **[seen]** |
 | 260 | `100` | stayed `100` across a battery swap; **[guess]** spare battery in the dock |
 | 270 | `0` | |
-| 280 | `4` | enum; HaloBattery saw `1` on battery, `2` on cable |
+| 280 | `4` | auto shut-off (`Power_Options`): `0` never, `1` 5, `2` 10, `3` 20, `4` 30 minutes. Swarm II wrote 0…4 while the user picked None…30 minutes **[capture, user]** |
 | 290 | `3` | power state: `3` on battery, `5` charging over USB **[seen]** |
 | 2a0 | `42` | `Master_Volume_Level` **[dll, ui]**, also moved by the left wheel: 2.4 GHz volume `0`–`100`, uneven steps (0, 1, 3, 6, 8, 12, 16, 21, 26, 30, 36, 42, 48, 54, 62, 71, 76, 87, 93, 100). The wheel also makes KDE show its volume pop-up **[seen]** |
 | 2b0 | `60` | |
 | 2c0 | `50` | |
 | 2d0 | `78` | |
-| 2e0 | `0` | |
+| 2e0 | `0` | wake on motion, `0`/`1` **[capture, user]** | |
 
 #### `BT`: Bluetooth (read with `RBT`; pushes `320` about every 10 s)
 | key | seen | meaning |
@@ -167,10 +167,11 @@ Writes marked ✎ were seen from Swarm II, with the values it used.
 - `info[1]`: `17` (0x11) for this PC's `2287` transmitter, `33` (0x21) for a second laptop's `2288` transmitter.
 - `info[3]`: `100` for `TX1`, `0` for `TX2`. `info[4]`: `1` when present.
 - `info[5..8]`: the transmitter's USB VID, PID, firmware and radio address.
-- `control`: `["0","100","100"]` for both live transmitters, all `0` for an empty slot. Most likely the charging
-  hub / transmitter settings Swarm II shows as voice prompt (`None`), LED 1 and LED 2 brightness (`100`, `100`); the
-  device module names them `Charging_Hub_Voice_Prompt`, `Charging_Hub_Led_Brightness_1/_2` and
-  `Transmitter_Voice_Prompt`, `Transmitter_Led_Brightness` **[dll, ui; mapping guess]**. Writing them is not captured.
+- `control`: `[voice prompt, LED 1, LED 2]`, `["0","100","100"]` for both live transmitters, all `0` for an empty
+  slot. Swarm II's Charging Hub section writes single elements with a key one past the slot's key: `0x401` = LED 1,
+  `0x402` = LED 2 (0–100) **[capture, ui]**, so `0x400` is presumably the voice prompt (its dropdown offers only
+  "None"). TX1 (`10f5:2287`) is therefore the charging hub's built-in transmitter. The device module names these
+  `Charging_Hub_Voice_Prompt` and `Charging_Hub_Led_Brightness_1/_2` **[dll]**.
 
 Seen: `TX1` = `10f5:2287` `C5:43:B0:09:56:F3` (this PC), `TX2` = `10f5:2288` `CB:AF:2C:41:F2:F3` (a second
 laptop's transmitter). `2288` is the third product ID listed in Swarm II's `Update.ini`.
@@ -208,12 +209,20 @@ Matched with the order of the round-1 writes:
 | 750 | `0` | ✎ 1, 0 | active noise cancellation on/off: the ANC button toggles it, `1`/`0`/`1` for three presses **[seen]**. Each press only beeps; there are no voice prompts |
 | 760 | `100` | ✎ 0, 100 | ANC level: the slider runs from `AMB` (ambient, outside sound let in) at `0` to `ANC` at `100`, with a centre mark **[ui]**. So "transparency" is the low end of this slider, not a separate mode |
 
-#### `Enc`: wheels **[guess]**
-`a00 = 1`, `a10 = 2`, `a20 = 1`, `a30 = 50`. Swarm II's Assignment page wrote `a20` = 2, 3, 4, 5, then 1 **[capture]**;
-what the five values mean is not known yet.
+#### `Enc`: wheels
+| key | seen | ✎ written | meaning |
+|-----|------|-----------|---------|
+| a00 | `1` | | |
+| a10 | `2` | | |
+| a20 | `1` | ✎ 2, 3, 4, 5, 1 | function of the assignable wheel on the left earcup **[ui, capture]**: `1` mic monitoring volume (default), `2` game and chat mix, `3` bass boost level, `4` treble boost level, `5` noise gate volume |
+| a30 | `50` | | **[guess]** game/chat mix position |
 
-#### `Btn`: buttons **[guess]**
-`b00`, `b10`, `b20` = `0`. The Assignment page wrote `b20` = 1, 2, then 0 **[capture]**.
+#### `Btn`: buttons
+| key | seen | ✎ written | meaning |
+|-----|------|-----------|---------|
+| b00 | `0` | | |
+| b10 | `0` | | |
+| b20 | `0` | ✎ 1, 2, 0 | function of the top button on the left earcup **[ui, capture]**: `0` active noise cancellation on/off (default), `1` cycle game presets, `2` noise gate on/off |
 
 #### `AQG`: game audio EQ
 | key | seen | ✎ written | meaning |
@@ -268,10 +277,12 @@ Derived the same way, from pushes in the order 1 → 2 → 3 → 4 (seen twice, 
 
 0. Does the left wheel really send Consumer Volume Up/Down? If so, KDE changes the *default* sink's volume, which may
    not be the headset, while the headset changes its own volume (`2a0`) as well.
-1. The Assignment page values: `Btn.b20` (0–2) and `Enc.a20` (1–5), and the other `Btn`/`Enc` keys.
-2. Not captured yet: auto shut-off (None/5/10/20/30 minutes), wake on motion, charging hub voice prompt and LED
-   brightness, the "Audio master volume" toggle (`Master_Volume_Enable`), monitoring enable (`640`?).
-3. Unknown keys: `GSI` 200, 210, 260, 270, 280, 2b0, 2c0, 2d0, 2e0; `Mic` 650; `BT` 300–350; `3DT` 500–530
+1. Not captured: the "Audio master volume" toggle (`Master_Volume_Enable`, also the "volume mute" hotkey) and
+   monitoring enable (`640`?). Both duplicate other controls (system mute, monitoring level 0).
+2. Which physical wheel `Enc.a20` assigns: Swarm II's drawing highlights a second wheel on the left earcup, apart
+   from the volume wheel (`2a0`).
+3. Unknown keys: `GSI` 200, 210, 260, 270, 2b0, 2c0, 2d0; `Mic` 650; `Enc` a00, a10, a30; `Btn` b00, b10;
+   `BT` 300–350; `3DT` 500–530
    (the device module also has settings for Waves 3D, chat boost and game/chat mix, which this headset's pages do not
    show).
 4. How are writes longer than one report sent? (None seen so far; preset names keep requests short.)
@@ -279,7 +290,7 @@ Derived the same way, from pushes in the order 1 → 2 → 3 → 4 (seen twice, 
 
 ## Sources
 
-- Our own Swarm II 1.0.0.59 captures, rounds 1 and 2 (device module 1.0.0.4, firmware 4.107.703.0), screenshots and
+- Our own Swarm II 1.0.0.59 captures, rounds 1 to 3 (device module 1.0.0.4, firmware 4.107.703.0), screenshots and
   the device module's strings: `captures/` (not committed).
 
 - HaloBattery `providers/turtlebeach.py` and `docs/protocols.md` (MIT): the Swarm II capture frames and the GSI

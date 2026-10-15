@@ -11,11 +11,18 @@ pub const ACTIVE_TRANSMITTER: u16 = 0x150;
 pub const NAME: u16 = 0x220;
 pub const BATTERY: u16 = 0x240;
 pub const CHARGING: u16 = 0x250;
+/// `Power_Options`: 0 never, 1 after 5, 2 after 10, 3 after 20, 4 after 30 minutes.
+pub const AUTO_SHUTOFF: u16 = 0x280;
 pub const POWER_STATE: u16 = 0x290;
+pub const WAKE_ON_MOTION: u16 = 0x2E0;
 /// `Master_Volume_Level`, also moved by the left wheel.
 pub const VOLUME: u16 = 0x2A0;
 // TX1..TX4
 pub const TRANSMITTERS: [u16; 4] = [0x400, 0x420, 0x440, 0x460];
+/// Elements of TX1's `control` array, written one by one: `0x401` = LED 1, `0x402` = LED 2 brightness of the
+/// charging hub (TX1 is the hub's built-in transmitter here).
+pub const HUB_LED_1: u16 = 0x401;
+pub const HUB_LED_2: u16 = 0x402;
 // Mic
 pub const MIC_MUTED: u16 = 0x600;
 pub const MIC_SENSITIVITY: u16 = 0x610;
@@ -34,9 +41,11 @@ pub const SUPERHUMAN_LEVEL: u16 = 0x740;
 pub const ANC: u16 = 0x750;
 /// `ANC_Level`: 0 = ambient (outside sound let in) … 100 = full noise cancellation.
 pub const ANC_LEVEL: u16 = 0x760;
-// Btn, Enc: written by the Assignment page; what the values mean is not known yet
-pub const BUTTON_B20: u16 = 0xB20;
-pub const WHEEL_A20: u16 = 0xA20;
+// Btn, Enc: the Assignment page
+/// What the button above the wheels on the left earcup does: see [`BUTTON_FUNCTIONS`].
+pub const BUTTON_FUNCTION: u16 = 0xB20;
+/// What the assignable wheel does: see [`WHEEL_FUNCTIONS`].
+pub const WHEEL_FUNCTION: u16 = 0xA20;
 // AQG (game EQ) and AQM (mic EQ): preset, 10 bands, preset name
 pub const GAME_EQ_PRESET: u16 = 0x1210;
 pub const GAME_EQ_BANDS: u16 = 0x1220;
@@ -66,6 +75,20 @@ pub const MIC_EQ_FREQUENCIES: [&str; 10] =
     ["100 Hz", "160 Hz", "250 Hz", "400 Hz", "630 Hz", "1 kHz", "1.6 kHz", "2.5 kHz", "4 kHz", "6.3 kHz"];
 /// Superhuman Hearing modes (`SAF.730`).
 pub const SUPERHUMAN_MODES: [&str; 3] = ["Legacy", "Footsteps", "Gunshots"];
+/// `Btn.b20` values, as Swarm II lists them.
+pub const BUTTON_FUNCTIONS: [(i64, &str); 3] =
+    [(0, "Active noise cancellation on/off"), (1, "Cycle game presets"), (2, "Noise gate on/off")];
+/// `Enc.a20` values, as Swarm II lists them.
+pub const WHEEL_FUNCTIONS: [(i64, &str); 5] = [
+    (1, "Mic monitoring volume"),
+    (2, "Game and chat mix"),
+    (3, "Bass boost level"),
+    (4, "Treble boost level"),
+    (5, "Noise gate volume"),
+];
+/// `GSI.280` values.
+pub const AUTO_SHUTOFF_OPTIONS: [(i64, &str); 5] =
+    [(0, "never"), (1, "5 minutes"), (2, "10 minutes"), (3, "20 minutes"), (4, "30 minutes")];
 
 /// The keys of one equalizer (game or mic).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -195,8 +218,12 @@ const OTHER: &[Setting] = &[
     range(SUPERHUMAN_LEVEL, "Superhuman Hearing level", 0, 100),
     range(ANC, "noise cancellation", 0, 1),
     range(ANC_LEVEL, "noise cancellation level", 0, 100),
-    range(BUTTON_B20, "button setting b20", 0, 2),
-    range(WHEEL_A20, "wheel setting a20", 1, 5),
+    range(BUTTON_FUNCTION, "button function", 0, 2),
+    range(WHEEL_FUNCTION, "wheel function", 1, 5),
+    range(AUTO_SHUTOFF, "auto shut-off", 0, 4),
+    range(WAKE_ON_MOTION, "wake on motion", 0, 1),
+    range(HUB_LED_1, "charging hub LED 1", 0, 100),
+    range(HUB_LED_2, "charging hub LED 2", 0, 100),
 ];
 
 /// Find the writable setting for a key.

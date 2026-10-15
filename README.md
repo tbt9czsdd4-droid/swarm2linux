@@ -6,7 +6,7 @@ This is an independent interoperability project and is not affiliated with Turtl
 
 ## Status
 
-`stealthctl` reads all 26 records and changes both EQs (presets, bands, saving and deleting custom presets), Superhuman Hearing, ANC, mic monitoring, noise gate, sensitivity and AI noise reduction. Still to capture: button/wheel assignment, power options, charging hub LEDs (see [docs/windows-harvest-3.md](docs/windows-harvest-3.md)). See [docs/PLAN.md](docs/PLAN.md) for the roadmap and
+`stealthctl` reads all 26 records and changes both EQs (presets, bands, saving and deleting custom presets), Superhuman Hearing, ANC, mic monitoring, noise gate, sensitivity and AI noise reduction. It also sets the button and wheel functions, auto shut-off, wake on motion and the charging hub LEDs; that covers every headset setting Swarm II offers on PC except the master-volume mute toggle. See [docs/PLAN.md](docs/PLAN.md) for the roadmap and
 [docs/protocol.md](docs/protocol.md) for what is known about the protocol.
 
 ## How it works
@@ -40,6 +40,10 @@ $B shh on                      # Superhuman Hearing; off, mode legacy|footsteps|
 $B anc on                      # off, level 0-100 (0 = ambient, 100 = full noise cancellation)
 $B monitor level 60            # how loud you hear your own voice
 $B mic gate on                 # mic: sensitivity N, gate on|off, gate-level N, ai on|off
+$B button cycle-eq             # top left button: anc | cycle-eq | noise-gate
+$B wheel chat-mix              # assignable wheel: monitoring | chat-mix | bass | treble | noise-gate
+$B power auto-off 20           # never | 5 | 10 | 20 | 30; power wake-on-motion on|off
+$B hub led1 30                 # charging hub LED brightness: led1 | led2 0-100
 $B watch                       # print changes as they happen (buttons, wheel, battery, CrossPlay)
 $B snapshot my.json            # save everything; `restore my.json` writes the settings back
 $B dump                        # every record as JSON

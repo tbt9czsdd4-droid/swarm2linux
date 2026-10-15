@@ -74,6 +74,20 @@ enum Cmd {
         #[command(subcommand)]
         cmd: MicCmd,
     },
+    /// What the button above the wheels on the left earcup does
+    Button { function: ButtonFunction },
+    /// What the assignable wheel does
+    Wheel { function: WheelFunction },
+    /// Auto shut-off and wake on motion
+    Power {
+        #[command(subcommand)]
+        cmd: PowerCmd,
+    },
+    /// Charging hub LEDs
+    Hub {
+        #[command(subcommand)]
+        cmd: HubCmd,
+    },
     /// Save all records to a JSON file
     Snapshot { file: PathBuf },
     /// Write back the settings saved in a snapshot
@@ -158,6 +172,46 @@ enum MicCmd {
     Ai { state: OnOff },
 }
 
+#[derive(Clone, Copy, ValueEnum)]
+enum ButtonFunction {
+    /// Active noise cancellation on/off (default)
+    Anc,
+    /// Cycle game EQ presets
+    CycleEq,
+    /// Noise gate on/off
+    NoiseGate,
+}
+
+#[derive(Clone, Copy, ValueEnum)]
+enum WheelFunction {
+    /// Mic monitoring volume (default)
+    Monitoring,
+    /// Game and chat mix
+    ChatMix,
+    /// Bass boost level
+    Bass,
+    /// Treble boost level
+    Treble,
+    /// Noise gate volume
+    NoiseGate,
+}
+
+#[derive(Subcommand)]
+enum PowerCmd {
+    /// Turn the headset off after this many idle minutes: never, 5, 10, 20 or 30
+    AutoOff { minutes: String },
+    /// Wake the headset when it is picked up
+    WakeOnMotion { state: OnOff },
+}
+
+#[derive(Subcommand)]
+enum HubCmd {
+    /// LED 1 brightness 0 to 100
+    Led1 { level: i64 },
+    /// LED 2 brightness 0 to 100
+    Led2 { level: i64 },
+}
+
 fn parse_key(s: &str) -> Result<u16, String> {
     let digits = s.strip_prefix("0x").unwrap_or(s);
     u16::from_str_radix(digits, 16).map_err(|e| format!("not a hex key: {e}"))
@@ -214,6 +268,23 @@ fn main() -> Result<()> {
             MicCmd::Gate { state } => write(&mut client, &[(keys::NOISE_GATE, state.value())]),
             MicCmd::GateLevel { level } => write(&mut client, &[(keys::NOISE_GATE_LEVEL, level)]),
             MicCmd::Ai { state } => write(&mut client, &[(keys::AI_NOISE_REDUCTION, state.value())]),
+        },
+        Cmd::Button { function } => write(&mut client, &[(keys::BUTTON_FUNCTION, function as i64)]),
+        Cmd::Wheel { function } => write(&mut client, &[(keys::WHEEL_FUNCTION, function as i64 + 1)]),
+        Cmd::Power { cmd } => match cmd {
+            PowerCmd::AutoOff { minutes } => {
+                let n = keys::AUTO_SHUTOFF_OPTIONS
+                    .iter()
+                    .find(|(_, label)| label.split(' ').next() == Some(minutes.as_str()))
+                    .map(|(n, _)| *n)
+                    .context("auto-off takes never, 5, 10, 20 or 30")?;
+                write(&mut client, &[(keys::AUTO_SHUTOFF, n)])
+            }
+            PowerCmd::WakeOnMotion { state } => write(&mut client, &[(keys::WAKE_ON_MOTION, state.value())]),
+        },
+        Cmd::Hub { cmd } => match cmd {
+            HubCmd::Led1 { level } => write(&mut client, &[(keys::HUB_LED_1, level)]),
+            HubCmd::Led2 { level } => write(&mut client, &[(keys::HUB_LED_2, level)]),
         },
         Cmd::Snapshot { file } => {
             let state = read_all(&mut client)?;
@@ -411,6 +482,20 @@ fn status(client: &mut Headset) -> Result<()> {
     println!("Mic           {muted}, sensitivity {}, A.I. noise reduction {}", num(keys::MIC_SENSITIVITY), on(keys::AI_NOISE_REDUCTION));
     println!("Noise gate    {} (level {})", on(keys::NOISE_GATE), num(keys::NOISE_GATE_LEVEL));
     println!("Monitoring    level {} (enabled: {})", num(keys::MONITORING_LEVEL), on(keys::MONITORING_ENABLE));
+    let pick = |key, options: &[(i64, &'static str)]| {
+        s.int(key).and_then(|v| options.iter().find(|(n, _)| *n == v)).map_or("?", |(_, label)| *label)
+    };
+    println!("Button        {}", pick(keys::BUTTON_FUNCTION, &keys::BUTTON_FUNCTIONS));
+    println!("Wheel         {}", pick(keys::WHEEL_FUNCTION, &keys::WHEEL_FUNCTIONS));
+    println!(
+        "Power         auto shut-off {}, wake on motion {}",
+        pick(keys::AUTO_SHUTOFF, &keys::AUTO_SHUTOFF_OPTIONS),
+        on(keys::WAKE_ON_MOTION)
+    );
+    if let Some(control) = s.raw(keys::TRANSMITTERS[0]).and_then(|v| v.get("control")).and_then(Value::as_array) {
+        let led = |i: usize| control.get(i).and_then(Value::as_str).unwrap_or("?").to_string();
+        println!("Charging hub  LED 1 {}, LED 2 {}", led(1), led(2));
+    }
     Ok(())
 }
 
