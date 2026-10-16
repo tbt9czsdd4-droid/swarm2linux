@@ -114,9 +114,11 @@ Built with [Slint](https://slint.dev) under its royalty-free licence; the Device
 
 ## stealth-tui (terminal app)
 
-| Equalizer | Settings |
+| Settings | Equalizer |
 |---|---|
-| ![The terminal app's equalizer: a braille curve over ten bands, and the presets](docs/screenshots/tui-equalizer.png) | ![The terminal app's settings page](docs/screenshots/tui-settings.png) |
+| ![The terminal app's Settings page: master volume, Superhuman Hearing, noise cancellation and the microphone](docs/screenshots/tui-settings.png) | ![The terminal app's Equalizer page: a braille curve over ten bands, and the presets](docs/screenshots/tui-equalizer.png) |
+| **Controls** | **Device** |
+| ![The terminal app's Controls page: the left earcup's controls and the mode button's functions](docs/screenshots/tui-controls.png) | ![The terminal app's Device page: battery, transmitter, power options, charging hub, notifications](docs/screenshots/tui-device.png) |
 
 The same four pages as the desktop app in a terminal, built with [ratatui](https://ratatui.rs). Like the desktop app
 it is a client of `stealthd` and needs it running. It works with vim keys, the arrow keys and the mouse; `?` shows

@@ -167,6 +167,7 @@ the fontconfig headers, and suits Swarm II's custom dark look; since 1.18 it has
   the mouse. It is a client of `stealthd` like the desktop app; both share `stealth_dbus::link` (the daemon threads)
   and `stealth_dbus::view` (the preset name check, transmitter lines and EQ Cancel).
 - `install.sh` installs it with the other programs.
+- 1.2.1: `H`/`L` and `Shift-←`/`Shift-→` switch pages; the ±10 slider step moves to `Ctrl-←`/`Ctrl-→` (or a count).
 
 ### Phase 8: Replacements for Windows-only host features
 - **Master volume — done:** the headset's volume (`2a0`) follows the USB playback volume and takes no writes Swarm II
