@@ -1,5 +1,5 @@
 [workspace]
-members = ["crates/race-hid", "crates/tb-proto", "crates/stealth-dbus", "crates/stealthctl", "crates/stealthd", "crates/stealth-gui", "crates/sink-volume"]
+members = ["crates/race-hid", "crates/tb-proto", "crates/stealth-dbus", "crates/stealthctl", "crates/stealthd", "crates/stealth-gui", "crates/sink-volume", "crates/stealth-tui"]
 resolver = "3"
 
 [workspace.package]
