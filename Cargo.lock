@@ -3606,7 +3606,7 @@ checksum = "f8dcc9c7d52a811697d2151c701e0d08956f92b0e24136cf4cf27b57a6a0d9bf"
 
 [[package]]
 name = "race-hid"
-version = "0.1.0"
+version = "1.0.0"
 dependencies = [
  "libc",
 ]
@@ -4247,7 +4247,7 @@ checksum = "a2eb9349b6444b326872e140eb1cf5e7c522154d69e7a0ffb0fb81c06b37543f"
 
 [[package]]
 name = "stealth-dbus"
-version = "0.1.0"
+version = "1.0.0"
 dependencies = [
  "tb-proto",
  "zbus",
@@ -4255,7 +4255,7 @@ dependencies = [
 
 [[package]]
 name = "stealth-gui"
-version = "0.1.0"
+version = "1.0.0"
 dependencies = [
  "anyhow",
  "png",
@@ -4270,7 +4270,7 @@ dependencies = [
 
 [[package]]
 name = "stealthctl"
-version = "0.1.0"
+version = "1.0.0"
 dependencies = [
  "anyhow",
  "clap",
@@ -4283,7 +4283,7 @@ dependencies = [
 
 [[package]]
 name = "stealthd"
-version = "0.1.0"
+version = "1.0.0"
 dependencies = [
  "anyhow",
  "async-channel",
@@ -4431,7 +4431,7 @@ dependencies = [
 
 [[package]]
 name = "tb-proto"
-version = "0.1.0"
+version = "1.0.0"
 dependencies = [
  "race-hid",
  "serde_json",

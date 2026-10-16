@@ -136,8 +136,8 @@ The protocol spec in `docs/protocol.md` is the contract between the two tracks.
 - Systemd user unit `packaging/stealthd.service`.
 
 ### Phase 7: GUI (`crates/stealth-gui`, Rust + Slint) — done
-Changed from the first plan: Slint instead of cxx-qt + QML/Kirigami. It is pure Rust, needs no C++ bridge or extra
--devel packages, and suits Swarm II's custom dark look; since 1.18 it has a StatusNotifierItem tray icon.
+Changed from the first plan: Slint instead of cxx-qt + QML/Kirigami. It is pure Rust, needs no C++ bridge and only
+the fontconfig headers, and suits Swarm II's custom dark look; since 1.18 it has a StatusNotifierItem tray icon.
 - Pages after Swarm II's:
   - **Settings:** master volume (read-only), Superhuman Hearing, noise cancellation (AMB to ANC), microphone
   - **Equalizer:** game and mic EQ graph, onboard and custom presets, save and delete
@@ -147,6 +147,13 @@ Changed from the first plan: Slint instead of cxx-qt + QML/Kirigami. It is pure 
 - One instance at a time (`io.github.swarm2linux.Gui`), `--hidden` starts in the tray, optional autostart entry.
 - The GUI is only a D-Bus client of `stealthd`. Not shown because Swarm II's writes were never captured: the
   master-volume mute toggle and the voice prompt. Swarm II's hotkeys belong to Phase 8.
+
+### Release 1.0 — done
+- `install.sh` installs the build tools (dnf, apt, pacman or zypper) and Rust (rustup) when they are missing, the
+  udev rule, the three programs in `~/.local/bin`, the menu entry and icon, and the `stealthd` user service.
+  `--uninstall` removes it again. Checked on clean Fedora 44 and Ubuntu 24.04 containers.
+- Not covered: immutable systems (Bazzite, Kinoite, Silverblue, SteamOS) and prebuilt binaries or distribution
+  packages (RPM, Flatpak).
 
 ### Phase 8: Replacements for Windows-only host features
 - **Per-app profiles:** a KWin script reports the active window to `stealthd` over D-Bus. This is the reliable way to see the active window on Plasma Wayland.
