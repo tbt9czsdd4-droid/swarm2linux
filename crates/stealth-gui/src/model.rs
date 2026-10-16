@@ -31,6 +31,7 @@ fn target(name: &str) -> Option<Target> {
         "battery" => Int(|h, v| h.set_battery(v)),
         "charging" => Bool(|h, v| h.set_charging(v)),
         "volume" => Int(|h, v| h.set_volume(v)),
+        "sink_volume" => Int(|h, v| h.set_sink_volume(v)),
         "mic_muted" => Bool(|h, v| h.set_mic_muted(v)),
         "transmitters" => Other(show_transmitters),
         "active_transmitter" => Int(|h, v| h.set_active_transmitter(v)),

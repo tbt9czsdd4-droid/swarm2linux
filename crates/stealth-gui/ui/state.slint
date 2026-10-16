@@ -19,6 +19,8 @@ export global Headset {
     in-out property <int> battery: -1;
     in-out property <bool> charging;
     in-out property <int> volume;
+    // the headset's volume in PipeWire, in percent as KDE shows it; -1 when unknown (then only `volume` is shown)
+    in-out property <int> sink-volume: -1;
     in-out property <bool> mic-muted;
     // one line per connected transmitter, and the charging hub's state (TX1 is the hub's transmitter)
     in-out property <[string]> transmitters;

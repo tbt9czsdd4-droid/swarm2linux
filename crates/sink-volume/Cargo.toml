@@ -1,0 +1,10 @@
+[package]
+name = "sink-volume"
+description = "The Stealth Pro II's playback volume as PipeWire keeps it, read with pw-dump and set with wpctl"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+serde_json.workspace = true

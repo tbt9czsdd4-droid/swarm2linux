@@ -7,6 +7,9 @@
 //! `io.github.swarm2linux.Headset1`. Value names are those of `tb_proto::values`.
 //!
 //! Its own settings are kept in `~/.config/swarm2linux/stealthd.toml`.
+//!
+//! Besides the headset's values it serves `sink_volume`: the headset's volume in PipeWire, which it reads and sets
+//! through the `sink-volume` crate.
 
 use std::collections::{BTreeMap, HashMap};
 use std::fs;
@@ -20,6 +23,7 @@ use std::time::{Duration, Instant};
 use anyhow::{Context, Result};
 use race_hid::{HidrawDevice, discover, known_product};
 use serde::{Deserialize, Serialize};
+use sink_volume::Sink;
 use stealth_dbus::{BUS_NAME, INTERFACE, PATH, from_value, to_owned_value, to_value};
 use tb_proto::keys::{self, EqKeys};
 use tb_proto::values::{self, Typed};
@@ -41,6 +45,9 @@ const PUSH_WAIT: Duration = Duration::from_millis(800);
 const PUSH_QUIET: Duration = Duration::from_millis(150);
 /// Battery levels that trigger a notification while discharging.
 const LOW_BATTERY: [i64; 2] = [15, 5];
+/// How often to read the volume from PipeWire. The headset's own `volume` changes with it and triggers a read
+/// too, but not for changes smaller than its 1 dB steps.
+const SINK_REFRESH: Duration = Duration::from_secs(5);
 
 /// What the D-Bus side asks the device thread to do.
 enum Op {
@@ -48,6 +55,8 @@ enum Op {
     SetBand { eq: &'static EqKeys, band: usize, tenths: i64 },
     SavePreset { eq: &'static EqKeys, name: String },
     DeletePreset { eq: &'static EqKeys, name: String },
+    /// The headset's volume in PipeWire, in percent.
+    SinkVolume(i64),
 }
 
 struct Request {
@@ -137,12 +146,18 @@ impl Headset {
         out
     }
 
-    /// Set one value by name, e.g. ("anc", true) or ("anc_level", 60).
+    /// Set one value by name, e.g. ("anc", true), ("anc_level", 60) or ("sink_volume", 50).
     async fn set(&self, name: String, value: OwnedValue) -> fdo::Result<()> {
         let typed = match from_value(&value) {
             Some(t @ (Typed::Bool(_) | Typed::Int(_))) => t,
             _ => return Err(fdo::Error::InvalidArgs("expected a boolean or an integer".into())),
         };
+        if name == "sink_volume" {
+            return match typed {
+                Typed::Int(n @ 0..=100) => self.submit(Op::SinkVolume(n)).await,
+                _ => Err(fdo::Error::InvalidArgs("sink_volume is a percentage from 0 to 100".into())),
+            };
+        }
         if values::to_write(&name, &typed).is_none() {
             return Err(fdo::Error::InvalidArgs(format!("{name} cannot be set this way")));
         }
@@ -211,7 +226,7 @@ fn main() -> Result<()> {
         .build()?;
     eprintln!("stealthd: serving {INTERFACE} at {PATH} as {BUS_NAME}");
 
-    let mut daemon = Daemon { conn, shared, queue, notified_low: None };
+    let mut daemon = Daemon { conn, shared, queue, notified_low: None, card: None, sink: None, sink_problem: None };
     loop {
         match pick_device() {
             Some((path, label)) => {
@@ -245,6 +260,11 @@ struct Daemon {
     queue: mpsc::Receiver<Request>,
     /// The lowest battery threshold already notified about while discharging.
     notified_low: Option<i64>,
+    /// The ALSA card of the device in use, and its sink in PipeWire as last read.
+    card: Option<u32>,
+    sink: Option<Sink>,
+    /// The last error reading the sink, so it is logged once.
+    sink_problem: Option<String>,
 }
 
 impl Daemon {
@@ -255,6 +275,12 @@ impl Daemon {
         for p in problems {
             eprintln!("stealthd: {p}");
         }
+        self.card = sink_volume::sound_card(path);
+        if self.card.is_none() {
+            eprintln!("stealthd: no sound card found for {}; the volume can't be set", path.display());
+        }
+        self.refresh_sink();
+        let mut next_sink_refresh = Instant::now() + SINK_REFRESH;
         self.publish(Some(label.to_string()), &state, client.headset_link());
         // when to subscribe again after the headset came back, and how many tries are left
         let mut resubscribe: Option<(Instant, u32)> = None;
@@ -262,7 +288,10 @@ impl Daemon {
         loop {
             match self.queue.recv_timeout(IDLE_POLL) {
                 Ok(req) => {
-                    let result = execute(&mut client, &state, req.op).map_err(|e| format!("{e:#}"));
+                    let result = match req.op {
+                        Op::SinkVolume(percent) => self.set_sink_volume(percent),
+                        op => execute(&mut client, &state, op).map_err(|e| format!("{e:#}")),
+                    };
                     if result.is_ok() {
                         // answer only once the headset has pushed the new values, so a read right after a
                         // write sees them
@@ -283,6 +312,12 @@ impl Daemon {
                     state.apply(doc);
                 }
                 self.publish(Some(label.to_string()), &state, client.headset_link());
+            }
+            if Instant::now() >= next_sink_refresh {
+                next_sink_refresh = Instant::now() + SINK_REFRESH;
+                if self.refresh_sink() {
+                    self.publish(Some(label.to_string()), &state, client.headset_link());
+                }
             }
             if client.take_link_up() {
                 // the headset restarted and forgot every subscription; give it a moment to settle
@@ -318,6 +353,17 @@ impl Daemon {
         // the link indication when one arrived, else whether the transmitter reports an active link
         if let Some(up) = link.or_else(|| state.int(keys::ACTIVE_TRANSMITTER).map(|t| t > 0)) {
             new.insert("headset_link", Typed::Bool(up));
+        }
+        if device.is_some() {
+            // the headset's own volume moves with PipeWire's: read that again
+            let moved = self.shared.lock().unwrap().values.get("volume") != new.get("volume");
+            if moved {
+                self.refresh_sink();
+            }
+            new.insert("sink_volume", Typed::Int(self.sink.map_or(-1, |s| s.percent)));
+        } else {
+            self.card = None;
+            self.sink = None;
         }
         let mut changed: HashMap<String, Value<'static>> = HashMap::new();
         {
@@ -364,6 +410,38 @@ impl Daemon {
         notify(&self.conn, "Headset battery low", &format!("Stealth Pro II battery at {level}%"));
     }
 
+    /// Read the volume from PipeWire again; true if it changed.
+    fn refresh_sink(&mut self) -> bool {
+        let found = match self.card {
+            Some(card) => sink_volume::find(card),
+            None => Ok(None),
+        };
+        let sink = found.unwrap_or_else(|e| {
+            let problem = e.to_string();
+            if self.sink_problem.as_ref() != Some(&problem) {
+                eprintln!("stealthd: reading the volume from PipeWire: {problem}");
+                self.sink_problem = Some(problem);
+            }
+            None
+        });
+        if sink.is_some() {
+            self.sink_problem = None;
+        }
+        let changed = sink != self.sink;
+        self.sink = sink;
+        changed
+    }
+
+    fn set_sink_volume(&mut self, percent: i64) -> Result<(), String> {
+        let card = self.card.ok_or("the headset's sound card was not found")?;
+        let sink = sink_volume::find(card)
+            .map_err(|e| e.to_string())?
+            .ok_or("PipeWire has no output for the headset")?;
+        sink_volume::set_percent(sink.id, percent).map_err(|e| e.to_string())?;
+        self.refresh_sink();
+        Ok(())
+    }
+
     /// Answer queued requests that cannot be served now.
     fn fail_pending(&self, why: &str) {
         while let Ok(req) = self.queue.try_recv() {
@@ -405,6 +483,7 @@ fn execute(client: &mut Client<HidrawDevice>, state: &State, op: Op) -> Result<(
         Op::SetBand { eq, band, tenths } => client.set(eq.band(band), tenths)?,
         Op::SavePreset { eq, name } => client.save_new_preset(state, eq, &name)?,
         Op::DeletePreset { eq, name } => client.delete_named_preset(state, eq, &name)?,
+        Op::SinkVolume(_) => unreachable!("handled by the daemon"),
     }
     Ok(())
 }

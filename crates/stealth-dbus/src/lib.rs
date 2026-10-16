@@ -5,7 +5,7 @@
 //! `io.github.swarm2linux.Stealthd`:
 //!
 //! - `Values() -> a{sv}`: every known value by name (see `tb_proto::values`), plus `connected` and `device`
-//! - `Set(s name, v value)`: set a boolean or integer value, e.g. `("anc", true)`
+//! - `Set(s name, v value)`: set a boolean or integer value, e.g. `("anc", true)` or `("sink_volume", 50)`
 //! - `SetBand(s eq, u band, i tenths)`: one band (1–10) of the `"game"` or `"mic"` equalizer, in tenths of a dB
 //! - `SavePreset(s eq, s name)`, `DeletePreset(s eq, s name)`: custom EQ presets
 //! - signal `Changed(a{sv})`: the values that changed
@@ -26,8 +26,9 @@ pub const PATH: &str = "/io/github/swarm2linux/Headset";
 pub const INTERFACE: &str = "io.github.swarm2linux.Headset1";
 
 /// Values that come from the daemon rather than the headset's records: whether a device is connected, its label,
-/// and whether the headset's radio link is up.
-pub const DAEMON_NAMES: [&str; 3] = ["connected", "device", "headset_link"];
+/// whether the headset's radio link is up, and the headset's volume in PipeWire in percent (`-1` when unknown;
+/// writable with `Set`, 0 to 100).
+pub const DAEMON_NAMES: [&str; 4] = ["connected", "device", "headset_link", "sink_volume"];
 
 /// The D-Bus form of a value.
 pub fn to_value(v: &Typed) -> Value<'static> {

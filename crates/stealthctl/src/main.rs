@@ -11,6 +11,7 @@ use anyhow::{Context, Result, bail};
 use clap::{Parser, Subcommand, ValueEnum};
 use race_hid::{HidrawDevice, discover, known_product};
 use serde_json::Value;
+use sink_volume::Sink;
 use stealth_dbus::DaemonClient;
 use tb_proto::keys::{self, EqKeys};
 use tb_proto::values::{self, Typed};
@@ -32,6 +33,11 @@ enum Cmd {
     Devices,
     /// Show battery, connection and settings
     Status,
+    /// Set the headset's volume in percent (0-100): its volume in the system's sound settings
+    Volume {
+        #[arg(value_parser = clap::value_parser!(u8).range(0..=100))]
+        percent: u8,
+    },
     /// Print changes as they happen
     Watch {
         /// stop after this many seconds (default: run until interrupted)
@@ -314,15 +320,18 @@ fn main() -> Result<()> {
     // SAFETY: setting a signal disposition to its default before any threads exist.
     unsafe { libc::signal(libc::SIGPIPE, libc::SIG_DFL) };
     let cli = Cli::parse();
-    if let Cmd::Devices = cli.cmd {
-        return devices();
+    match cli.cmd {
+        Cmd::Devices => return devices(),
+        // PipeWire's business, not the headset's: needs neither stealthd nor the device
+        Cmd::Volume { percent } => return set_volume(cli.device.as_deref(), i64::from(percent)),
+        _ => {}
     }
     let mut backend = Backend::open(cli.device.as_deref())?;
     let b = &mut backend;
 
     match cli.cmd {
-        Cmd::Devices => unreachable!(),
-        Cmd::Status => status(b),
+        Cmd::Devices | Cmd::Volume { .. } => unreachable!(),
+        Cmd::Status => status(b, cli.device.as_deref()),
         Cmd::Watch { seconds } => watch(b, seconds.map(Duration::from_secs)),
         Cmd::Eq { cmd } => equalizer(b, &keys::GAME_EQ, cmd),
         Cmd::MicEq { cmd } => equalizer(b, &keys::MIC_EQ, cmd),
@@ -500,7 +509,23 @@ fn preset_name(v: &Values, eq: &EqKeys) -> String {
     }
 }
 
-fn status(b: &mut Backend) -> Result<()> {
+/// The headset's sink in PipeWire: that of the given hidraw device, or of the first headset found.
+fn sink(device: Option<&Path>) -> Result<Sink> {
+    let path = match device {
+        Some(p) => p.to_path_buf(),
+        None => discover()?.into_iter().find(|d| d.vendor_collection).context("no headset found")?.path,
+    };
+    let card = sink_volume::sound_card(&path).with_context(|| format!("no sound card found for {}", path.display()))?;
+    sink_volume::find(card)?.context("PipeWire has no output for the headset")
+}
+
+fn set_volume(device: Option<&Path>, percent: i64) -> Result<()> {
+    sink_volume::set_percent(sink(device)?.id, percent)?;
+    println!("volume {}%", sink(device)?.percent);
+    Ok(())
+}
+
+fn status(b: &mut Backend, device: Option<&Path>) -> Result<()> {
     let v = b.values()?;
     if v.get("connected") != Some(&Typed::Bool(true)) {
         println!("No headset connected (stealthd is waiting for one).");
@@ -527,7 +552,12 @@ fn status(b: &mut Backend) -> Result<()> {
         _ => "none".to_string(),
     };
     println!("Transmitters  {tx}");
-    println!("Volume        {}", num(&v, "volume"));
+    let system = match b {
+        Backend::Daemon(_) => int(&v, "sink_volume").filter(|&p| p >= 0),
+        Backend::Direct(_) => sink(device).ok().map(|s| s.percent),
+    };
+    let system = system.map(|p| format!(" on the headset, {p}% in the system")).unwrap_or_default();
+    println!("Volume        {}{system}", num(&v, "volume"));
     println!("Game EQ       {}  [{}] dB", preset_name(&v, &keys::GAME_EQ), bands_text(&v, "game_eq_bands"));
     println!("Mic EQ        {}  [{}] dB", preset_name(&v, &keys::MIC_EQ), bands_text(&v, "mic_eq_bands"));
     let mode = int(&v, "superhuman_mode").and_then(|m| keys::SUPERHUMAN_MODES.get(m as usize).copied()).unwrap_or("?");

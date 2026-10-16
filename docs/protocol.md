@@ -148,7 +148,7 @@ Writes marked ✎ were seen from Swarm II, with the values it used.
 | 270 | `0` | |
 | 280 | `4` | auto shut-off (`Power_Options`): `0` never, `1` 5, `2` 10, `3` 20, `4` 30 minutes. Swarm II wrote 0…4 while the user picked None…30 minutes **[capture, user]** |
 | 290 | `3` | power state: `3` on battery, `5` charging over USB **[seen]** |
-| 2a0 | `42` | `Master_Volume_Level` **[dll, ui]**, also moved by the left wheel: 2.4 GHz volume `0`–`100`, uneven steps (0, 1, 3, 6, 8, 12, 16, 21, 26, 30, 36, 42, 48, 54, 62, 71, 76, 87, 93, 100). The wheel also makes KDE show its volume pop-up **[seen]** |
+| 2a0 | `42` | `Master_Volume_Level` **[dll, ui]**, also moved by the left wheel: 2.4 GHz volume `0`–`100`, uneven steps (0, 1, 3, 6, 8, 12, 16, 21, 26, 30, 36, 42, 48, 54, 62, 71, 76, 87, 93, 100). The wheel also makes KDE show its volume pop-up **[seen]**. It is the USB playback volume (ALSA `PCM Playback Volume`, 0–74 = −74…0 dB) on the headset's scale, about 100 × 10^(dB/33): −5 dB → 71, −9 → 54, −18 → 30, −31 → 12, −60 → 1 **[seen]**. Changing the sink volume in PipeWire moves it, so stealthd sets the volume there (`sink_volume`) |
 | 2b0 | `60` | |
 | 2c0 | `50` | |
 | 2d0 | `78` | |
@@ -194,7 +194,7 @@ Matched with the order of the round-1 writes:
 | key | seen | ✎ written | meaning |
 |-----|------|-----------|---------|
 | 600 | `0` | | mute: flip-to-mute up `1`, down `0` **[seen]** |
-| 610 | `51`, `84` | ✎ 100, 0, 84 | sensitivity **[ui]**. The device pushed the new value *before* Swarm II's write, so it probably follows the Windows mic level (UAC feature unit 6) **[guess]** |
+| 610 | `51`, `84` | ✎ 100, 0, 84 | sensitivity **[ui]**. The device pushed the new value *before* Swarm II's write, so it follows the PC's mic level (UAC feature unit 6): on Linux it moves with the input volume in pavucontrol **[user]** |
 | 620 | `70`, `85`, `65` | ✎ 0, 100, 85 | monitoring level (hearing your own voice): writing `0` from Linux silenced it, `65` brought it back **[seen]** |
 | 630 | `0` | ✎ 1, 0 | AI noise reduction, `1` = on: the page showed "Off" with `0`, then Swarm II wrote `1` and `0` for on and off **[ui, capture]** |
 | 640 | `1` | | **[guess]** monitoring enable: Swarm II only offers it as a hotkey, never wrote it |
@@ -278,8 +278,9 @@ Derived the same way, from pushes in the order 1 → 2 → 3 → 4 (seen twice, 
 
 ## 5. Open questions
 
-0. Does the left wheel really send Consumer Volume Up/Down? If so, KDE changes the *default* sink's volume, which may
-   not be the headset, while the headset changes its own volume (`2a0`) as well.
+0. ~~Does the left wheel really send Consumer Volume Up/Down?~~ Yes: KDE shows its volume pop-up and changes the
+   *default* sink's volume **[user]**. While the headset is the default output, that is the headset's own volume
+   (`2a0` follows); otherwise the wheel changes another device's volume.
 1. Not captured: the "Audio master volume" toggle (`Master_Volume_Enable`, also the "volume mute" hotkey) and
    monitoring enable (`640`?). Both duplicate other controls (system mute, monitoring level 0).
 2. Unknown keys: `GSI` 200, 210, 260, 270, 2b0, 2c0, 2d0; `Mic` 650; `Enc` a00, a10, a30; `Btn` b00, b10;

@@ -156,6 +156,10 @@ the fontconfig headers, and suits Swarm II's custom dark look; since 1.18 it has
   packages (RPM, Flatpak).
 
 ### Phase 8: Replacements for Windows-only host features
+- **Master volume — done:** the headset's volume (`2a0`) follows the USB playback volume and takes no writes Swarm II
+  was seen making. So `stealthd` sets the headset's sink volume in PipeWire (`wpctl`) and serves it as
+  `sink_volume`, read with `pw-dump` whenever `2a0` moves and every 5 s. The app's master volume slider and
+  `stealthctl volume` use it.
 - **Per-app profiles:** a KWin script reports the active window to `stealthd` over D-Bus. This is the reliable way to see the active window on Plasma Wayland.
 - **Global hotkeys:** the `org.freedesktop.portal.GlobalShortcuts` portal (via `ashpd`).
 - **Dolby Atmos can't be ported** (it's a licensed Windows component). Offer an optional PipeWire filter-chain virtual-surround preset as a substitute.

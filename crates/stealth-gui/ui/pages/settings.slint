@@ -25,19 +25,28 @@ component AudioCard inherits Card {
             min-height: 34px;
             Label { text: "MASTER VOLUME"; }
             Text {
-                text: Headset.volume;
+                text: Headset.sink-volume >= 0 ? Headset.sink-volume + "%" : Headset.volume;
                 color: Theme.muted;
                 font-size: Theme.label-size;
                 vertical-alignment: center;
             }
         }
+        // set through PipeWire; without it, only the headset's own reading is shown
         GradientSlider {
-            value: Headset.volume;
-            read-only: true;
+            value: Headset.sink-volume >= 0 ? Headset.sink-volume : Headset.volume;
+            read-only: Headset.sink-volume < 0;
             enabled: Headset.available;
             name: "Master volume";
+            released(v) => {
+                Headset.sink-volume = v;
+                Headset.set-int("sink_volume", v);
+            }
         }
-        Hint { text: "Turn the volume wheel on the left earcup to change it."; }
+        Hint {
+            text: Headset.sink-volume >= 0
+                ? "The headset's volume in the system's sound settings. The volume wheel on the left earcup changes it too."
+                : "Turn the volume wheel on the left earcup to change it.";
+        }
     }
 
     VerticalLayout {

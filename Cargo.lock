@@ -4008,6 +4008,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "sink-volume"
+version = "1.0.0"
+dependencies = [
+ "serde_json",
+]
+
+[[package]]
 name = "siphasher"
 version = "1.0.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4277,6 +4284,7 @@ dependencies = [
  "libc",
  "race-hid",
  "serde_json",
+ "sink-volume",
  "stealth-dbus",
  "tb-proto",
 ]
@@ -4289,6 +4297,7 @@ dependencies = [
  "async-channel",
  "race-hid",
  "serde",
+ "sink-volume",
  "stealth-dbus",
  "tb-proto",
  "toml",

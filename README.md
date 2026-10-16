@@ -22,8 +22,8 @@ This is an independent interoperability project and is not affiliated with Turtl
 
 ## Installation
 
-You need Linux with a systemd user session, such as Fedora, Ubuntu, Debian, Arch or openSUSE with KDE Plasma or
-GNOME, and the headset's USB transmitter (or its USB-C cable).
+You need Linux with a systemd user session and PipeWire, such as Fedora, Ubuntu, Debian, Arch or openSUSE with
+KDE Plasma or GNOME, and the headset's USB transmitter (or its USB-C cable).
 
 ```sh
 git clone https://github.com/tbt9czsdd4-droid/swarm2linux.git
@@ -96,7 +96,8 @@ tunnels a JSON key/value protocol through them. This project speaks that protoco
 A Slint app in the style of Swarm II, with four pages:
 
 - **Settings:** master volume, Superhuman Hearing (mode and level), noise cancellation (ambient to full), and the
-  microphone (sensitivity, monitoring, noise gate, AI noise reduction).
+  microphone (sensitivity, monitoring, noise gate, AI noise reduction). The master volume is the headset's volume
+  in the system's sound settings, the one KDE and the volume wheel change.
 - **Equalizer:** game and mic EQ as a draggable 10-band graph, the onboard presets, and saving and deleting custom
   presets.
 - **Controls:** what the mode button and the assignable wheel do.
@@ -117,9 +118,14 @@ with every record subscribed, follows unplugging, and serves everything on the s
 notification when the battery drops to 15 % and 5 % (the `BatteryNotifications` property turns that off; it is
 kept in `~/.config/swarm2linux/stealthd.toml`). `install.sh` runs it as the systemd user service `stealthd`.
 
+The headset's volume belongs to PipeWire: the headset reports it but takes no writes for it. So `stealthd` finds
+the headset's sound output in PipeWire (with `pw-dump`), serves its volume in percent as `sink_volume`, and sets
+it with `wpctl`. Without those two tools, the volume is shown but can't be changed.
+
 D-Bus: `io.github.swarm2linux.Stealthd`, object `/io/github/swarm2linux/Headset`, interface
 `io.github.swarm2linux.Headset1` with `Values() -> a{sv}`, `Set(s, v)`, `SetBand(s, u, i)`, `SavePreset(s, s)`,
-`DeletePreset(s, s)` and the signal `Changed(a{sv})`. Value names are listed in `crates/tb-proto/src/values.rs`.
+`DeletePreset(s, s)` and the signal `Changed(a{sv})`. Value names are listed in `crates/tb-proto/src/values.rs`,
+plus `connected`, `device`, `headset_link` and `sink_volume` from the daemon.
 
 ```sh
 busctl --user call io.github.swarm2linux.Stealthd /io/github/swarm2linux/Headset \
@@ -133,6 +139,7 @@ need direct access and ask you to stop the service first.
 
 ```sh
 stealthctl status                 # battery, transmitters, volume, both EQs, Superhuman Hearing, ANC, mic
+stealthctl volume 40              # the headset's volume in the system's sound settings, 0-100
 stealthctl eq list                # game EQ: bands with frequencies, built-in and custom presets
 stealthctl eq preset bass         # signature | bass | bass-treble | vocal | <custom preset name>
 stealthctl eq band 1 -3.5         # dB in steps of 0.5
