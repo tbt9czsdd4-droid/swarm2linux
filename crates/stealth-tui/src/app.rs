@@ -957,6 +957,10 @@ pub(crate) mod tests {
         assert_eq!(app.page, Page::Device);
         press(&mut app, "gT", t);
         assert_eq!(app.page, Page::Controls);
+        press(&mut app, "LL", t);
+        assert_eq!(app.page, Page::Settings, "L goes right and wraps around");
+        press(&mut app, "H", t);
+        assert_eq!(app.page, Page::Device);
         assert!(app.take_commands(t).is_empty(), "moving writes nothing");
     }
 
@@ -981,7 +985,7 @@ pub(crate) mod tests {
         press(&mut app, "hhh", t);
         assert!(app.take_commands(t).is_empty());
         assert_eq!(app.values.int("sink_volume"), Some(77), "shown at once");
-        press(&mut app, "H", t + Duration::from_millis(200));
+        press(&mut app, "10h", t + Duration::from_millis(200));
         assert!(app.take_commands(t + Duration::from_millis(400)).is_empty(), "the last change restarts the wait");
         assert_eq!(app.take_commands(t + Duration::from_millis(500)), [set("sink_volume", Typed::Int(67))]);
         // a change from the headset while a write waits does not undo the shown value

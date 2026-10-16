@@ -153,7 +153,7 @@ fn hints(app: &App) -> Vec<(&'static str, &'static str)> {
         (Daemon::Running, Page::Controls) => vec![("j/k", "move"), ("Enter", "choose"), ("Tab", "switch list")],
         _ => vec![],
     };
-    h.extend([("gt", "next page"), ("?", "help"), ("q", "quit")]);
+    h.extend([("H/L", "page"), ("?", "help"), ("q", "quit")]);
     h
 }
 
@@ -242,12 +242,13 @@ fn help_lines() -> Vec<Line<'static>> {
         section("Everywhere"),
         key("j k  ↓ ↑", "next / previous control (with a count: 3j)"),
         key("h l  ← →", "change: −1 / +1, previous / next option, off / on"),
-        key("H L  Shift-← Shift-→", "change by 10"),
+        key("Ctrl-← Ctrl-→", "change by 10 (with vim keys, a count: 10l)"),
         key("0  $", "minimum / maximum ($ does not apply to master volume)"),
         key("gg G  Home End", "first / last control"),
         key("Enter  Space", "toggle, or open the options"),
         key("Tab  Shift-Tab", "next / previous card"),
-        key("gt gT  ] [", "next / previous page"),
+        key("H L  Shift-← Shift-→", "previous / next page"),
+        key("gT gt  [ ]", "previous / next page"),
         key("2gt", "page 2 (Settings 1, Equalizer 2, Controls 3, Device 4)"),
         key("?", "this help"),
         key("q  :q  Ctrl-c", "quit"),

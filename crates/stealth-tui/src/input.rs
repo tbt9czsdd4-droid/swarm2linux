@@ -12,7 +12,7 @@ pub enum Action {
     BigMove(i64),
     /// `h`/`l`, `←`/`→`: left (negative) or right.
     Adjust(i64),
-    /// `H`/`L`, `Shift-←`/`Shift-→`: a bigger step.
+    /// `Ctrl-←`/`Ctrl-→`: a bigger step (with vim keys, a count: `10l`).
     BigAdjust(i64),
     /// `gg`, `Home`
     First,
@@ -29,7 +29,7 @@ pub enum Action {
     PrevPane,
     /// `{n}gt`
     Page(usize),
-    /// `gt`, `]`, `Ctrl-PageDown`; `gT`, `[`, `Ctrl-PageUp`
+    /// `L`, `Shift-→`, `gt`, `]`, `Ctrl-PageDown`; `H`, `Shift-←`, `gT`, `[`, `Ctrl-PageUp`
     NextPage,
     PrevPage,
     /// `dd`, `x`
@@ -151,12 +151,14 @@ impl KeyState {
             KeyCode::Char('k') | KeyCode::Up => Action::Move(-count),
             KeyCode::Char('J') => Action::BigMove(count),
             KeyCode::Char('K') => Action::BigMove(-count),
-            KeyCode::Left if shift => Action::BigAdjust(-count),
-            KeyCode::Right if shift => Action::BigAdjust(count),
+            KeyCode::Char('H') => Action::PrevPage,
+            KeyCode::Char('L') => Action::NextPage,
+            KeyCode::Left if shift => Action::PrevPage,
+            KeyCode::Right if shift => Action::NextPage,
+            KeyCode::Left if ctrl => Action::BigAdjust(-count),
+            KeyCode::Right if ctrl => Action::BigAdjust(count),
             KeyCode::Char('h') | KeyCode::Left => Action::Adjust(-count),
             KeyCode::Char('l') | KeyCode::Right => Action::Adjust(count),
-            KeyCode::Char('H') => Action::BigAdjust(-count),
-            KeyCode::Char('L') => Action::BigAdjust(count),
             KeyCode::Char('G') | KeyCode::End => Action::Last,
             KeyCode::Home => Action::First,
             KeyCode::Char('0') => Action::Min,
@@ -216,7 +218,8 @@ mod tests {
         assert_eq!(actions("12l"), [Action::Adjust(12)]);
         assert_eq!(actions("10h"), [Action::Adjust(-10)], "0 continues a count");
         assert_eq!(actions("0"), [Action::Min], "0 alone is the minimum");
-        assert_eq!(actions("$H"), [Action::Max, Action::BigAdjust(-1)]);
+        assert_eq!(actions("$H"), [Action::Max, Action::PrevPage]);
+        assert_eq!(actions("L"), [Action::NextPage]);
         assert_eq!(actions("2K"), [Action::BigMove(-2)]);
     }
 
@@ -248,7 +251,9 @@ mod tests {
         let key = |code, m| KeyEvent::new(code, m);
         assert_eq!(state.key(key(KeyCode::Down, KeyModifiers::NONE)), Outcome::Action(Action::Move(1)));
         assert_eq!(state.key(key(KeyCode::Left, KeyModifiers::NONE)), Outcome::Action(Action::Adjust(-1)));
-        assert_eq!(state.key(key(KeyCode::Right, KeyModifiers::SHIFT)), Outcome::Action(Action::BigAdjust(1)));
+        assert_eq!(state.key(key(KeyCode::Right, KeyModifiers::SHIFT)), Outcome::Action(Action::NextPage));
+        assert_eq!(state.key(key(KeyCode::Left, KeyModifiers::SHIFT)), Outcome::Action(Action::PrevPage));
+        assert_eq!(state.key(key(KeyCode::Left, KeyModifiers::CONTROL)), Outcome::Action(Action::BigAdjust(-1)));
         assert_eq!(state.key(key(KeyCode::Home, KeyModifiers::NONE)), Outcome::Action(Action::First));
         assert_eq!(state.key(key(KeyCode::PageDown, KeyModifiers::CONTROL)), Outcome::Action(Action::NextPage));
         assert_eq!(state.key(key(KeyCode::Char('c'), KeyModifiers::CONTROL)), Outcome::Action(Action::Quit));

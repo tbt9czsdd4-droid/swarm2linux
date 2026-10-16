@@ -126,12 +126,12 @@ every key.
 |---|---|
 | `j` `k` / `↓` `↑` | next / previous control; with a count, `3j` |
 | `h` `l` / `←` `→` | change by one: a slider, the option, off / on (`5l` changes by five) |
-| `H` `L` / `Shift-←` `Shift-→` | change by ten |
+| `Ctrl-←` `Ctrl-→` | change by ten (with vim keys, a count: `10l`) |
 | `0` `$` | minimum / maximum (`$` does not apply to the master volume) |
 | `gg` `G` / `Home` `End` | first / last control |
 | `Enter` `Space` | toggle, or open the options |
 | `Tab` `Shift-Tab` | next / previous card |
-| `gt` `gT` / `]` `[` | next / previous page; `2gt` goes to page 2 |
+| `H` `L` / `Shift-←` `Shift-→` | previous / next page (also `gT` `gt`, `[` `]`; `2gt` goes to page 2) |
 | `q` `:q` `Ctrl-c` | quit |
 
 On the Equalizer graph, `h` `l` choose a band and `k` `j` raise and lower it by 0.5 dB (`K` `J` by 3 dB); `=` sets it
