@@ -16,7 +16,7 @@ use crate::theme::{self, rgb};
 
 const PRESETS_WIDTH: u16 = 34;
 /// The plot's range in tenths of a dB, a little beyond ±9 dB so the dots at the ends show whole.
-const RANGE: f64 = 100.0;
+pub const RANGE: f64 = 100.0;
 
 pub fn draw(f: &mut Frame, area: Rect, app: &mut App) {
     if area.width >= TWO_COLUMNS {

@@ -3,7 +3,7 @@
 
 mod cards;
 mod controls;
-mod equalizer;
+pub mod equalizer;
 pub mod widgets;
 
 use ratatui::Frame;
@@ -333,6 +333,86 @@ mod tests {
             app.key(KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE), Instant::now());
             assert!(screen(&mut app, w, h).contains("SIGNATURE SOUND"));
         }
+    }
+
+    fn mouse(app: &mut App, kind: ratatui::crossterm::event::MouseEventKind, x: u16, y: u16) {
+        use ratatui::crossterm::event::MouseEvent;
+        app.mouse(MouseEvent { kind, column: x, row: y, modifiers: KeyModifiers::NONE }, Instant::now());
+    }
+
+    fn click(app: &mut App, x: u16, y: u16) {
+        use ratatui::crossterm::event::{MouseButton, MouseEventKind};
+        mouse(app, MouseEventKind::Down(MouseButton::Left), x, y);
+        mouse(app, MouseEventKind::Up(MouseButton::Left), x, y);
+    }
+
+    fn find(app: &App, wanted: impl Fn(&Hit) -> bool) -> Rect {
+        app.hits.iter().find(|(_, h)| wanted(h)).map(|(r, _)| *r).expect("drawn")
+    }
+
+    #[test]
+    fn mouse_clicks_drags_and_scrolls() {
+        use ratatui::crossterm::event::{MouseButton, MouseEventKind};
+        use stealth_dbus::link::Command;
+        use tb_proto::values::Typed;
+        let later = || Instant::now() + 2 * crate::app::DEBOUNCE;
+        let mut app = connected();
+        screen(&mut app, 120, 36);
+
+        // the volume bar: its left end, then dragged to the middle; one write when it rests
+        let (index, track) = app.hits.iter().find_map(|(_, h)| match h {
+            Hit::Control { index: 0, track: Some(t) } => Some((0, *t)),
+            _ => None,
+        }).expect("volume bar");
+        let bar_y = find(&app, |h| matches!(h, Hit::Control { index: 0, .. })).y + 1;
+        mouse(&mut app, MouseEventKind::Down(MouseButton::Left), track.0, bar_y);
+        assert_eq!(app.values.int("sink_volume"), Some(0));
+        mouse(&mut app, MouseEventKind::Drag(MouseButton::Left), track.0 + track.1 / 2, bar_y);
+        mouse(&mut app, MouseEventKind::Up(MouseButton::Left), track.0 + track.1 / 2, bar_y);
+        let half = app.values.int("sink_volume").unwrap();
+        assert!((45..=55).contains(&half), "{half}");
+        assert_eq!(app.take_commands(later()), [Command::Set("sink_volume".into(), Typed::Int(half))]);
+        assert_eq!(app.focus[0], index);
+
+        // a toggle flips; the wheel over a slider changes it by one
+        let anc = find(&app, |h| matches!(h, Hit::Control { index: 4, .. }));
+        click(&mut app, anc.x + 2, anc.y);
+        assert_eq!(app.take_commands(later()), [Command::Set("anc".into(), Typed::Bool(true))]);
+        let sensitivity = find(&app, |h| matches!(h, Hit::Control { index: 6, .. }));
+        mouse(&mut app, MouseEventKind::ScrollDown, sensitivity.x + 3, sensitivity.y);
+        assert_eq!(app.take_commands(later()), [Command::Set("mic_sensitivity".into(), Typed::Int(99))]);
+
+        // an option opens the popup, a click on an option chooses it
+        app.page = Page::Device;
+        screen(&mut app, 120, 36);
+        let shutoff = find(&app, |h| matches!(h, Hit::Control { index: 0, .. }));
+        click(&mut app, shutoff.x + 2, shutoff.y);
+        assert!(app.popup.is_some());
+        screen(&mut app, 120, 36);
+        let option = find(&app, |h| *h == Hit::Option(0));
+        click(&mut app, option.x + 3, option.y);
+        assert_eq!(app.take_commands(later()), [Command::Set("auto_shutoff".into(), Typed::Int(0))]);
+        assert!(app.popup.is_none());
+
+        // tabs, the EQ graph (top of band 3 is +9 dB) and a preset
+        let tab = find(&app, |h| *h == Hit::Tab(Page::Equalizer));
+        click(&mut app, tab.x + 1, tab.y);
+        assert_eq!(app.page, Page::Equalizer);
+        screen(&mut app, 120, 36);
+        let plot = find(&app, |h| matches!(h, Hit::EqGraph(_)));
+        let band3 = plot.x + plot.width * 5 / 20;
+        mouse(&mut app, MouseEventKind::Down(MouseButton::Left), band3, plot.y);
+        mouse(&mut app, MouseEventKind::Drag(MouseButton::Left), band3 + 9, plot.y + plot.height / 2);
+        mouse(&mut app, MouseEventKind::Up(MouseButton::Left), band3, plot.y);
+        assert_eq!(app.eq.band, 2);
+        assert_eq!(app.bands(EqTab::Game)[2], 0, "dragged back to the middle, the band it started on");
+        assert_eq!(app.bands(EqTab::Game)[3], 0);
+        assert!(app.edited(EqTab::Game));
+        app.take_commands(later());
+        screen(&mut app, 120, 36);
+        let bassy = find(&app, |h| *h == Hit::EqPreset(4));
+        click(&mut app, bassy.x + 3, bassy.y);
+        assert_eq!(app.take_commands(later()), [Command::Set("game_eq_preset".into(), Typed::Int(16))]);
     }
 
     #[test]

@@ -4,7 +4,7 @@
 use std::collections::HashMap;
 use std::time::{Duration, Instant};
 
-use ratatui::crossterm::event::{Event as TermEvent, KeyCode, KeyEvent, KeyEventKind, MouseEvent};
+use ratatui::crossterm::event::{Event as TermEvent, KeyCode, KeyEvent, KeyEventKind, MouseButton, MouseEvent, MouseEventKind};
 use ratatui::layout::Rect;
 use stealth_dbus::link::{Command, Event};
 use stealth_dbus::view::{self, EqEdit};
@@ -15,6 +15,7 @@ use crate::input::{self, Action, KeyState, Outcome};
 use crate::line_input::LineInput;
 use crate::model::{self, Control, Kind, Values};
 use crate::pages;
+use crate::ui::{equalizer::RANGE, widgets};
 
 /// How long a slider or EQ band rests before its value is written: the terminal's "write on release".
 pub const DEBOUNCE: Duration = Duration::from_millis(300);
@@ -123,6 +124,15 @@ pub enum Hit {
     Option(usize),
 }
 
+/// What the left mouse button is dragging.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum Drag {
+    /// a slider: its control and track (first column, width)
+    Slider(Control, u16, u16),
+    /// an EQ band, along the plot's height
+    Band(usize, Rect),
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct Toast {
     pub text: String,
@@ -167,7 +177,7 @@ pub struct App {
     pub keys: KeyState,
     pub hits: Vec<(Rect, Hit)>,
     /// what the left mouse button is dragging
-    pub drag: Option<Hit>,
+    pub drag: Option<Drag>,
     pending: Vec<Pending>,
     edits: HashMap<EqTab, EqEdit>,
     outbox: Vec<Command>,
@@ -745,7 +755,133 @@ impl App {
 
     // ---- mouse ----
 
-    pub fn mouse(&mut self, _mouse: MouseEvent, _now: Instant) {}
+    /// The topmost clickable thing at a cell: the one drawn last.
+    fn hit_at(&self, x: u16, y: u16) -> Option<(Rect, Hit)> {
+        self.hits.iter().rev().find(|(r, _)| x >= r.x && x < r.right() && y >= r.y && y < r.bottom()).copied()
+    }
+
+    pub fn mouse(&mut self, mouse: MouseEvent, now: Instant) {
+        let (x, y) = (mouse.column, mouse.row);
+        match mouse.kind {
+            MouseEventKind::Down(MouseButton::Left) => self.click(x, y, now),
+            MouseEventKind::Drag(MouseButton::Left) => match self.drag {
+                Some(Drag::Slider(control, start, width)) => self.slide(control, start, width, x, now),
+                Some(Drag::Band(band, plot)) => self.set_band(self.eq.tab, band, tenths_at(plot, y), now),
+                None => {}
+            },
+            MouseEventKind::Up(_) => self.drag = None,
+            MouseEventKind::ScrollUp | MouseEventKind::ScrollDown => {
+                let step = if mouse.kind == MouseEventKind::ScrollUp { 1 } else { -1 };
+                self.scroll(x, y, step, now);
+            }
+            _ => {}
+        }
+    }
+
+    fn click(&mut self, x: u16, y: u16, now: Instant) {
+        let hit = self.hit_at(x, y);
+        match &self.popup {
+            Some(Popup::Choose { control, .. }) => {
+                let control = *control;
+                if let Some((_, Hit::Option(i))) = hit {
+                    self.change(control, Change::To(i as i64), now);
+                }
+                self.popup = None;
+                return;
+            }
+            Some(Popup::Help(_)) => {
+                self.popup = None;
+                return;
+            }
+            // typing and confirming take keys
+            Some(_) => return,
+            None => {}
+        }
+        let Some((rect, hit)) = hit else { return };
+        self.keys.clear();
+        match hit {
+            Hit::Tab(page) => self.page = page,
+            _ if self.daemon != Daemon::Running => {}
+            Hit::Control { index, track } => {
+                self.focus[self.page.index()] = index;
+                let Some(control) = self.focused() else { return };
+                match (control.kind(), track) {
+                    // the bar is the control's second line
+                    (Kind::Slider { .. }, Some((start, width))) if y == rect.y + 1 => {
+                        self.drag = Some(Drag::Slider(control, start, width));
+                        self.slide(control, start, width, x, now);
+                    }
+                    (Kind::Slider { .. }, _) => {}
+                    _ => self.change(control, Change::Activate, now),
+                }
+            }
+            Hit::EqGraph(plot) => {
+                self.eq.pane = 0;
+                let band = (((x - plot.x) as usize * 10) / plot.width.max(1) as usize).min(9);
+                self.eq.band = band;
+                self.drag = Some(Drag::Band(band, plot));
+                self.set_band(self.eq.tab, band, tenths_at(plot, y), now);
+            }
+            Hit::EqTab(tab) => self.eq.tab = tab,
+            Hit::EqPreset(i) => {
+                self.eq.pane = 1;
+                self.choose_preset(self.eq.tab, i, now);
+            }
+            Hit::EqButton('u') => self.undo(self.eq.tab, now),
+            Hit::EqButton(_) => self.start_save(self.eq.tab, now),
+            Hit::Earcup(k) => {
+                self.controls.control = k;
+                self.controls.pane = 0;
+            }
+            Hit::Function(i) => {
+                self.controls.pane = 1;
+                self.choose_function(i, now);
+            }
+            Hit::Option(_) => {}
+        }
+    }
+
+    /// Set a slider to the value under column `x` of its track.
+    fn slide(&mut self, control: Control, start: u16, width: u16, x: u16, now: Instant) {
+        if let Kind::Slider { min, max, .. } = control.kind() {
+            let value = widgets::slider_value_at(x.saturating_sub(start), width, min, max);
+            self.change(control, Change::To(value), now);
+        }
+    }
+
+    /// The wheel changes the slider or EQ band under the pointer, and moves through the option popup.
+    fn scroll(&mut self, x: u16, y: u16, step: i64, now: Instant) {
+        if let Some(Popup::Choose { control, cursor }) = self.popup {
+            let last = control.options().len().saturating_sub(1) as i64;
+            self.popup = Some(Popup::Choose { control, cursor: (cursor as i64 - step).clamp(0, last) as usize });
+            return;
+        }
+        if self.popup.is_some() || self.daemon != Daemon::Running {
+            return;
+        }
+        match self.hit_at(x, y) {
+            Some((_, Hit::Control { index, .. })) => {
+                self.focus[self.page.index()] = index;
+                if let Some(control) = self.focused().filter(|c| matches!(c.kind(), Kind::Slider { .. })) {
+                    self.change(control, Change::By(step), now);
+                }
+            }
+            Some((_, Hit::EqGraph(plot))) => {
+                let band = (((x - plot.x) as usize * 10) / plot.width.max(1) as usize).min(9);
+                self.eq.band = band;
+                self.eq.pane = 0;
+                let current = self.bands(self.eq.tab)[band];
+                self.set_band(self.eq.tab, band, current + 5 * step, now);
+            }
+            _ => {}
+        }
+    }
+}
+
+/// The band value (tenths of a dB) at row `y` of the EQ plot.
+fn tenths_at(plot: Rect, y: u16) -> i64 {
+    let row = f64::from(y.saturating_sub(plot.y).min(plot.height.saturating_sub(1)));
+    (RANGE - row / f64::from(plot.height.saturating_sub(1).max(1)) * 2.0 * RANGE).round() as i64
 }
 
 #[cfg(test)]
