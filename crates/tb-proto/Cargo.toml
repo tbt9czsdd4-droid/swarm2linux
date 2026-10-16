@@ -3,6 +3,7 @@ name = "tb-proto"
 description = "Turtle Beach Stealth Pro II key/value protocol (RACE cmd 0x9902)"
 version.workspace = true
 edition.workspace = true
+license.workspace = true
 publish.workspace = true
 
 [dependencies]

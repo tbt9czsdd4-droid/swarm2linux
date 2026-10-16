@@ -3,6 +3,7 @@ name = "stealthd"
 description = "Background service for the Turtle Beach Stealth Pro II: owns the device and serves it on D-Bus"
 version.workspace = true
 edition.workspace = true
+license.workspace = true
 publish.workspace = true
 
 [dependencies]

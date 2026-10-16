@@ -3,6 +3,7 @@ name = "race-hid"
 description = "Airoha RACE packets over USB HID (hidraw), as used by Turtle Beach Stealth Pro II transmitters"
 version.workspace = true
 edition.workspace = true
+license.workspace = true
 publish.workspace = true
 
 [dependencies]

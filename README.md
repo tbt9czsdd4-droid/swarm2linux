@@ -174,3 +174,9 @@ for that.
 
 The tools only send frames that Turtle Beach's own app has been observed sending. They never send RACE storage
 (`0x04xx`) or firmware-update (`0x1Cxx`) commands. Firmware updates are out of scope; use the official mobile app.
+
+## License
+
+MIT, see [LICENSE](LICENSE). The app is built with [Slint](https://slint.dev), which it uses under the Slint
+Royalty-free Desktop, Mobile, and Web Applications License; that licence asks for the "Made with Slint" credit on
+the app's Device page.

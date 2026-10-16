@@ -3,6 +3,7 @@ name = "stealth-gui"
 description = "Desktop app for the Turtle Beach Stealth Pro II on Linux, a client of stealthd"
 version.workspace = true
 edition.workspace = true
+license.workspace = true
 publish.workspace = true
 
 [dependencies]
