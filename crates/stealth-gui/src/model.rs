@@ -3,6 +3,7 @@
 use std::collections::BTreeMap;
 
 use slint::{Model, ModelRc, SharedString, VecModel};
+use stealth_dbus::view::{self, EqEdit, capitalized};
 use tb_proto::keys;
 use tb_proto::values::Typed;
 
@@ -86,28 +87,9 @@ fn show_transmitters(h: &Headset<'_>, value: &Typed) {
         Typed::Texts(list) => list,
         _ => &[],
     };
-    let (lines, hub) = transmitters(entries);
+    let (lines, hub) = view::transmitter_lines(entries);
     h.set_transmitters(texts(&lines));
     h.set_hub_status(hub.into());
-}
-
-/// A line per transmitter from entries like "1 2287 active", and the charging hub's state: that of slot 1.
-fn transmitters(entries: &[String]) -> (Vec<String>, String) {
-    let mut lines = Vec::new();
-    let mut hub = "Not connected".to_string();
-    for entry in entries {
-        let mut parts = entry.split_whitespace();
-        let (Some(slot), Some(product), Some(state)) = (parts.next(), parts.next(), parts.next()) else { continue };
-        // the headset sometimes reports product 0
-        lines.push(match product {
-            "0" => format!("Transmitter {slot} · {state}"),
-            _ => format!("Transmitter {slot} · 10f5:{product} · {state}"),
-        });
-        if slot == "1" {
-            hub = capitalized(state);
-        }
-    }
-    (lines, hub)
 }
 
 /// Fill the option lists.
@@ -123,34 +105,18 @@ pub fn init(h: &Headset<'_>) {
     h.set_mic_eq_frequencies(texts(&keys::MIC_EQ.frequencies));
 }
 
-/// Whether the headset takes `name` as a custom preset name.
-pub fn valid_preset_name(name: &str) -> bool {
-    keys::writable(keys::GAME_EQ_NAME).is_some_and(|s| s.values.accepts_text(name))
-}
-
 /// Why `name` cannot be used for a new preset of the "game" or "mic" equalizer, or "" if it can (or is empty).
 pub fn preset_name_problem(h: &Headset<'_>, eq: &str, name: &str) -> &'static str {
-    let taken = if eq == "game" { h.get_game_eq_slots() } else { h.get_mic_eq_slots() };
-    if name.is_empty() {
-        ""
-    } else if !valid_preset_name(name) {
-        "Up to 16 characters, without quotes or backslashes"
-    } else if taken.iter().any(|s| s.eq_ignore_ascii_case(name)) {
-        "There is already a preset with this name"
-    } else {
-        ""
-    }
+    let slots = if eq == "game" { h.get_game_eq_slots() } else { h.get_mic_eq_slots() };
+    view::preset_name_problem(&slots.iter().collect::<Vec<_>>(), name)
 }
 
-/// An equalizer's preset number and bands.
-pub type Equalizer = (i32, Vec<i32>);
-
 /// The preset and bands shown for the "game" or "mic" equalizer.
-pub fn equalizer(h: &Headset<'_>, eq: &str) -> Equalizer {
+pub fn equalizer(h: &Headset<'_>, eq: &str) -> EqEdit {
     if eq == "game" {
-        (h.get_game_eq_preset(), h.get_game_eq_bands().iter().collect())
+        EqEdit { preset: h.get_game_eq_preset(), bands: h.get_game_eq_bands().iter().collect() }
     } else {
-        (h.get_mic_eq_preset(), h.get_mic_eq_bands().iter().collect())
+        EqEdit { preset: h.get_mic_eq_preset(), bands: h.get_mic_eq_bands().iter().collect() }
     }
 }
 
@@ -172,11 +138,6 @@ fn choices(list: impl IntoIterator<Item = (i64, &'static str)>) -> ModelRc<Choic
     ModelRc::new(VecModel::from(items))
 }
 
-fn capitalized(s: &str) -> String {
-    let mut chars = s.chars();
-    chars.next().map(|c| c.to_uppercase().chain(chars).collect()).unwrap_or_default()
-}
-
 fn ints(list: &[i64]) -> ModelRc<i32> {
     ModelRc::new(VecModel::from(list.iter().map(|&n| n as i32).collect::<Vec<_>>()))
 }
@@ -194,27 +155,5 @@ mod tests {
         for name in tb_proto::values::NAMES.iter().chain(stealth_dbus::DAEMON_NAMES.iter()) {
             assert!(target(name).is_some(), "{name} is not shown");
         }
-    }
-
-    #[test]
-    fn transmitter_lines() {
-        let (lines, hub) =
-            transmitters(&["2 229b standby".into(), "1 2287 active".into(), "3 0 standby".into(), "bad".into()]);
-        assert_eq!(
-            lines,
-            ["Transmitter 2 · 10f5:229b · standby", "Transmitter 1 · 10f5:2287 · active", "Transmitter 3 · standby"]
-        );
-        assert_eq!(hub, "Active");
-        assert_eq!(transmitters(&[]).1, "Not connected");
-    }
-
-    #[test]
-    fn labels_and_names() {
-        assert_eq!(capitalized("never"), "Never");
-        assert_eq!(capitalized(""), "");
-        assert!(valid_preset_name("My Preset"));
-        assert!(!valid_preset_name(""));
-        assert!(!valid_preset_name("a name that is far too long"));
-        assert!(!valid_preset_name("quote\""));
     }
 }

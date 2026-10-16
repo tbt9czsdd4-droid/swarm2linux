@@ -20,8 +20,10 @@ use std::rc::Rc;
 use std::time::Duration;
 
 use anyhow::Result;
-use bridge::{Bridge, Command, Views};
+use bridge::Views;
 use slint::ComponentHandle;
+use stealth_dbus::link::{Command, Link};
+use stealth_dbus::view::EqEdit;
 use tb_proto::values::Typed;
 
 /// The app's id: the Wayland app id, the desktop file's name and the icon's name.
@@ -111,7 +113,7 @@ fn main() -> Result<()> {
 }
 
 /// Send the writes a view asks for to stealthd.
-fn connect_writes(h: &Headset<'_>, bridge: &Bridge) {
+fn connect_writes(h: &Headset<'_>, bridge: &Link) {
     let b = bridge.clone();
     h.on_set_bool(move |name, v| b.send(Command::Set(name.into(), Typed::Bool(v))));
     let b = bridge.clone();
@@ -127,7 +129,7 @@ fn connect_writes(h: &Headset<'_>, bridge: &Bridge) {
 }
 
 /// The equalizer page's name check and Cancel.
-fn connect_equalizer(ui: &AppWindow, bridge: &Bridge) {
+fn connect_equalizer(ui: &AppWindow, bridge: &Link) {
     let h = ui.global::<Headset>();
     let weak = ui.as_weak();
     h.on_preset_name_problem(move |eq, name| {
@@ -135,7 +137,7 @@ fn connect_equalizer(ui: &AppWindow, bridge: &Bridge) {
     });
 
     // the preset and bands of each equalizer from before the first change
-    let before: Rc<RefCell<HashMap<String, model::Equalizer>>> = Rc::default();
+    let before: Rc<RefCell<HashMap<String, EqEdit>>> = Rc::default();
     let (weak, saved) = (ui.as_weak(), before.clone());
     h.on_eq_edit_started(move |eq| {
         if let Some(ui) = weak.upgrade() {
@@ -144,25 +146,18 @@ fn connect_equalizer(ui: &AppWindow, bridge: &Bridge) {
     });
     let (weak, b) = (ui.as_weak(), bridge.clone());
     h.on_eq_edit_cancelled(move |eq| {
-        let (Some(ui), Some((preset, bands))) = (weak.upgrade(), before.borrow_mut().remove(eq.as_str())) else {
+        let (Some(ui), Some(edit)) = (weak.upgrade(), before.borrow_mut().remove(eq.as_str())) else {
             return;
         };
         let h = ui.global::<Headset>();
-        if preset != 0 {
-            b.send(Command::Set(format!("{eq}_eq_preset"), Typed::Int(preset.into())));
-        } else {
-            let (_, now) = model::equalizer(&h, &eq);
-            for (band, (&old, &new)) in bands.iter().zip(&now).enumerate() {
-                if old != new {
-                    b.send(Command::SetBand(eq.to_string(), band as u32 + 1, old));
-                }
-            }
+        for command in edit.cancel_writes(&eq, &model::equalizer(&h, &eq).bands) {
+            b.send(command);
         }
-        model::show_equalizer(&h, &eq, preset, &bands);
+        model::show_equalizer(&h, &eq, edit.preset, &edit.bands);
     });
 }
 
-fn connect_tray(ui: &AppWindow, tray: &Tray, bridge: &Bridge) {
+fn connect_tray(ui: &AppWindow, tray: &Tray, bridge: &Link) {
     let weak = ui.as_weak();
     tray.on_open(move || {
         if let Some(ui) = weak.upgrade() {

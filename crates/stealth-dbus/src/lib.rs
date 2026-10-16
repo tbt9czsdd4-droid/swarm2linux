@@ -13,6 +13,11 @@
 //! - property `BatteryNotifications` (b, writable): whether stealthd warns about a low battery
 //!
 //! Besides the names of `tb_proto::values::NAMES`, `Values` and `Changed` carry [`DAEMON_NAMES`].
+//!
+//! For the apps, [`link`] runs a link to stealthd in the background and [`view`] holds what they show and check.
+
+pub mod link;
+pub mod view;
 
 use std::collections::{BTreeMap, HashMap};
 
