@@ -196,7 +196,7 @@ Matched with the order of the round-1 writes:
 | 600 | `0` | | mute: flip-to-mute up `1`, down `0` **[seen]** |
 | 610 | `51`, `84` | ✎ 100, 0, 84 | sensitivity **[ui]**. The device pushed the new value *before* Swarm II's write, so it follows the PC's mic level (UAC feature unit 6): on Linux it moves with the input volume in pavucontrol **[user]** |
 | 620 | `70`, `85`, `65` | ✎ 0, 100, 85 | monitoring level (hearing your own voice): writing `0` from Linux silenced it, `65` brought it back **[seen]** |
-| 630 | `0` | ✎ 1, 0 | AI noise reduction, `1` = on: the page showed "Off" with `0`, then Swarm II wrote `1` and `0` for on and off **[ui, capture]** |
+| 630 | `0` | ✎ 1, 0 | AI noise reduction, `1` = on: the page showed "Off" with `0`, then Swarm II wrote `1` and `0` for on and off **[ui, capture]**. It runs in the headset and changes what the PC records: with steady white noise it took the background from −53 to −75 dBFS (most at 2.5–4 kHz), also between words, and left the voice level alone; monitoring sounds different too **[seen, user]**. Once it was in effect while `630` read `0` (open question 5) |
 | 640 | `1` | | **[guess]** monitoring enable: Swarm II only offers it as a hotkey, never wrote it |
 | 650 | `0` | | |
 
@@ -204,7 +204,7 @@ Matched with the order of the round-1 writes:
 
 | key | seen | ✎ written | meaning |
 |-----|------|-----------|---------|
-| 700 | `0` | ✎ 1, 0 | noise gate on/off **[ui, user]**. Round 1 labelled this "mic monitoring" because the user heard their own voice after `700 = 1` was written; that test had no off/on comparison and monitoring (`620`) was on all along |
+| 700 | `0` | ✎ 1, 0 | noise gate on/off **[ui, user]**. Round 1 labelled this "mic monitoring" because the user heard their own voice after `700 = 1` was written; that test had no off/on comparison and monitoring (`620`) was on all along. It runs in the headset and changes what the PC records: at level 100 it lowers the background by a flat 12 dB while you are quiet and lets it through while you talk, including between words **[seen, user]** |
 | 710 | `0`, `100` | ✎ 100, 0, 100 | noise gate level **[ui, user]** |
 | 720 | `0`, `1` | ✎ 1, 0 | Superhuman Hearing on/off: the power button's short press toggles it **[seen]**; selecting an EQ preset pushes `720 = 0` **[seen]** |
 | 730 | `0` | ✎ 1, 2, 0 | Superhuman Hearing mode (`SHH_Preset`): `0` Legacy, `1` Footsteps, `2` Gunshots **[ui, dll]** |
@@ -247,6 +247,8 @@ applying the pushes in the order the presets were selected (Signature → Bass �
 
 #### `AQM`: mic EQ
 Same layout as `AQG` with keys 1300–13c0. Bands at 100, 160, 250, 400, 630 Hz, 1, 1.6, 2.5, 4, 6.3 kHz **[ui]**.
+The EQ runs in the headset and shapes what the PC records: bands 1–5 at −9 dB and 6–10 at +9 dB moved a steady
+background noise by −6 to −9 dB at 160–630 Hz and +7 to +9 dB at 1–6.3 kHz **[seen]**.
 Presets **[seen]**:
 
 | `1310` | name | bands 1–10 (tenths of a dB) |
@@ -289,6 +291,9 @@ Derived the same way, from pushes in the order 1 → 2 → 3 → 4 (seen twice, 
    show).
 3. How are writes longer than one report sent? (None seen so far; preset names keep requests short.)
 4. Does `target = 80` reach the headset directly?
+5. In one recording AI noise reduction was in effect although `630` read `0` (same spectral fingerprint as with it
+   on); writing `1` and then `0` ended it, writing `0` alone did not. The headset had restarted about 20 minutes
+   before. Does it come back from a restart with noise reduction on while reporting it off?
 
 ## Sources
 
