@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Install swarm2linux for the current user: stealthctl, the background service stealthd (started with the graphical
-# session) and the desktop app stealth-gui with its menu entry. It also installs what the build needs (asking
-# first) and the udev rule that lets the logged-in user open the headset.
+# session), the desktop app stealth-gui with its menu entry, and the terminal app stealth-tui. It also installs what
+# the build needs (asking first) and the udev rule that lets the logged-in user open the headset.
 #
 #   ./install.sh               install, or update after `git pull`
 #   ./install.sh --uninstall   remove what this script installed
@@ -20,7 +20,7 @@ ICON=$DATA/icons/hicolor/scalable/apps/$APP_ID.svg
 UNIT=$CONFIG/systemd/user/stealthd.service
 AUTOSTART=$CONFIG/autostart/$APP_ID.desktop
 RULE=/etc/udev/rules.d/70-swarm2linux.rules
-PROGRAMS=(stealthctl stealthd stealth-gui)
+PROGRAMS=(stealthctl stealthd stealth-gui stealth-tui)
 
 yes=false
 udev=true
@@ -211,14 +211,14 @@ install_all() {
     fi
 
     step "Done"
-    note "Open \"swarm2linux\" from the app menu, or run stealth-gui."
+    note "Open \"swarm2linux\" from the app menu, or run stealth-gui; in a terminal, run stealth-tui."
     note "For the tray icon after login, turn on \"Start with the session\" on the app's Device page."
     if pgrep -x -u "$(id -u)" stealth-gui >/dev/null; then
         note "stealth-gui is running already: quit it from its tray menu and start it again to use this version."
     fi
     case ":$PATH:" in
         *":$BIN:"*) ;;
-        *) note "Add $BIN to your PATH to run stealthctl and stealth-gui from a terminal." ;;
+        *) note "Add $BIN to your PATH to run stealthctl, stealth-gui and stealth-tui from a terminal." ;;
     esac
 }
 

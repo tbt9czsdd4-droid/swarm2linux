@@ -39,12 +39,12 @@ The script installs everything for your user and asks before it changes anything
 3. **Headset access.** It installs the udev rule `/etc/udev/rules.d/70-swarm2linux.rules`, so your user can open
    the headset. This step needs your sudo password.
 4. **Build.** It builds everything, which takes a few minutes the first time.
-5. **Install.** It puts the programs into `~/.local/bin`: `stealth-gui` (the app), `stealthd` (the background
-   service) and `stealthctl` (the command line tool). It adds the **swarm2linux** entry to the app menu and starts
-   `stealthd` now and with every login.
+5. **Install.** It puts the programs into `~/.local/bin`: `stealth-gui` (the desktop app), `stealth-tui` (the
+   terminal app), `stealthd` (the background service) and `stealthctl` (the command line tool). It adds the
+   **swarm2linux** entry to the app menu and starts `stealthd` now and with every login.
 
-Then open **swarm2linux** from the app menu. If you want the tray icon after login, turn on **Start with the
-session** on the app's Device page.
+Then open **swarm2linux** from the app menu, or run `stealth-tui` in a terminal. If you want the tray icon after
+login, turn on **Start with the session** on the desktop app's Device page.
 
 | Task | Command |
 |---|---|
@@ -71,7 +71,8 @@ the build tools with a normal package manager.
 
 ## Status
 
-Version 1.1. The desktop app `stealth-gui` covers the same settings as Swarm II's pages, with a tray icon for the battery.
+Version 1.2. The desktop app `stealth-gui` covers the same settings as Swarm II's pages, with a tray icon for the
+battery, and the terminal app `stealth-tui` has the same pages with vim keys.
 `stealthctl` reads all 26 records and changes both EQs (presets, bands, saving and deleting custom presets), Superhuman Hearing, ANC, mic monitoring, noise gate, sensitivity and AI noise reduction. It also sets the button and wheel functions, auto shut-off, wake on motion and the charging hub LEDs; that covers every headset setting Swarm II offers on PC except the master-volume mute toggle. See [docs/PLAN.md](docs/PLAN.md) for the roadmap and
 [docs/protocol.md](docs/protocol.md) for what is known about the protocol.
 
@@ -110,6 +111,37 @@ the app in the tray (turn the tray off on the Device page to quit on close), and
 the tray.
 
 Built with [Slint](https://slint.dev) under its royalty-free licence; the Device page carries the credit.
+
+## stealth-tui (terminal app)
+
+| Equalizer | Settings |
+|---|---|
+| ![The terminal app's equalizer: a braille curve over ten bands, and the presets](docs/screenshots/tui-equalizer.png) | ![The terminal app's settings page](docs/screenshots/tui-settings.png) |
+
+The same four pages as the desktop app in a terminal, built with [ratatui](https://ratatui.rs). Like the desktop app
+it is a client of `stealthd` and needs it running. It works with vim keys, the arrow keys and the mouse; `?` shows
+every key.
+
+| Keys | Action |
+|---|---|
+| `j` `k` / `↓` `↑` | next / previous control; with a count, `3j` |
+| `h` `l` / `←` `→` | change by one: a slider, the option, off / on (`5l` changes by five) |
+| `H` `L` / `Shift-←` `Shift-→` | change by ten |
+| `0` `$` | minimum / maximum (`$` does not apply to the master volume) |
+| `gg` `G` / `Home` `End` | first / last control |
+| `Enter` `Space` | toggle, or open the options |
+| `Tab` `Shift-Tab` | next / previous card |
+| `gt` `gT` / `]` `[` | next / previous page; `2gt` goes to page 2 |
+| `q` `:q` `Ctrl-c` | quit |
+
+On the Equalizer graph, `h` `l` choose a band and `k` `j` raise and lower it by 0.5 dB (`K` `J` by 3 dB); `=` sets it
+to 0 dB, `t` switches between the game and mic EQ, `u` undoes the changes and `s` saves them as a new preset. In the
+preset list, `Enter` chooses a preset and `dd` deletes a custom one.
+
+The mouse works too: click tabs, controls, options and presets, click or drag sliders and EQ bands, and turn the
+wheel over a slider or band. Sliders and bands are written to the headset once they have rested for 300 ms, so
+holding a key down does not flood it. The terminal needs to be at least 80×24; from 100 columns on, the cards sit
+in two columns. Colours use truecolor when `COLORTERM` says the terminal has it, otherwise 256 colours.
 
 ## stealthd (background service)
 

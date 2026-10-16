@@ -162,6 +162,12 @@ the fontconfig headers, and suits Swarm II's custom dark look; since 1.18 it has
 - Mic recordings from Linux showed that AI noise reduction, the noise gate and the mic EQ all act on what the PC
   records (`docs/protocol.md`).
 
+### Release 1.2 — done
+- `stealth-tui`, a terminal app with the desktop app's pages (ratatui 0.30 with crossterm), vim keys, arrows and
+  the mouse. It is a client of `stealthd` like the desktop app; both share `stealth_dbus::link` (the daemon threads)
+  and `stealth_dbus::view` (the preset name check, transmitter lines and EQ Cancel).
+- `install.sh` installs it with the other programs.
+
 ### Phase 8: Replacements for Windows-only host features
 - **Master volume — done:** the headset's volume (`2a0`) follows the USB playback volume and takes no writes Swarm II
   was seen making. So `stealthd` sets the headset's sink volume in PipeWire (`wpctl`) and serves it as
