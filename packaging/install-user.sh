@@ -8,7 +8,10 @@ cargo build --release
 install -Dm755 target/release/stealthctl "$HOME/.local/bin/stealthctl"
 install -Dm755 target/release/stealthd "$HOME/.local/bin/stealthd"
 install -Dm755 target/release/stealth-gui "$HOME/.local/bin/stealth-gui"
-install -Dm644 packaging/io.github.swarm2linux.desktop "$HOME/.local/share/applications/io.github.swarm2linux.desktop"
+# Plasma's PATH usually lacks ~/.local/bin, so the menu entry names the program by its full path
+mkdir -p "$HOME/.local/share/applications"
+sed "s|^Exec=stealth-gui|Exec=$HOME/.local/bin/stealth-gui|" packaging/io.github.swarm2linux.desktop \
+    > "$HOME/.local/share/applications/io.github.swarm2linux.desktop"
 install -Dm644 packaging/icons/io.github.swarm2linux.svg \
     "$HOME/.local/share/icons/hicolor/scalable/apps/io.github.swarm2linux.svg"
 install -Dm644 packaging/stealthd.service "$HOME/.config/systemd/user/stealthd.service"
