@@ -275,6 +275,7 @@ impl Daemon {
         for p in problems {
             eprintln!("stealthd: {p}");
         }
+        settle_noise_reduction(&mut client, &mut state)?;
         self.card = sink_volume::sound_card(path);
         if self.card.is_none() {
             eprintln!("stealthd: no sound card found for {}; the volume can't be set", path.display());
@@ -331,6 +332,7 @@ impl Daemon {
                         eprintln!("stealthd: headset back, subscribed again");
                         state = fresh;
                         resubscribe = None;
+                        settle_noise_reduction(&mut client, &mut state)?;
                         self.publish(Some(label.to_string()), &state, client.headset_link());
                     }
                     Ok((_, problems)) => {
@@ -472,6 +474,31 @@ fn await_pushes(client: &mut Client<HidrawDevice>) -> Result<Vec<tb_proto::Docum
             sleep(Duration::from_millis(30));
         }
     }
+}
+
+/// The headset can come back from a restart with AI noise reduction at work while it reports it off: in recordings
+/// the background noise is about 20 dB lower, as with it on, until it is switched on and off again. Writing `0`
+/// alone does not end it. So whenever the headset connects with it reported off, switch it on and off (both writes
+/// Swarm II makes), before the values are published.
+fn settle_noise_reduction(client: &mut Client<HidrawDevice>, state: &mut State) -> Result<()> {
+    if state.int(keys::AI_NOISE_REDUCTION) != Some(0) {
+        return Ok(());
+    }
+    for value in [1, 0] {
+        match client.set(keys::AI_NOISE_REDUCTION, value) {
+            Ok(()) => {}
+            Err(e @ tb_proto::Error::Timeout(_)) => {
+                eprintln!("stealthd: switching AI noise reduction off again: {e}");
+                return Ok(());
+            }
+            Err(e) => return Err(e.into()),
+        }
+        for doc in await_pushes(client)? {
+            state.apply(&doc);
+        }
+    }
+    eprintln!("stealthd: switched AI noise reduction on and off, so it is really off");
+    Ok(())
 }
 
 fn execute(client: &mut Client<HidrawDevice>, state: &State, op: Op) -> Result<()> {

@@ -118,6 +118,9 @@ with every record subscribed, follows unplugging, and serves everything on the s
 notification when the battery drops to 15 % and 5 % (the `BatteryNotifications` property turns that off; it is
 kept in `~/.config/swarm2linux/stealthd.toml`). `install.sh` runs it as the systemd user service `stealthd`.
 
+After a restart the headset can keep AI noise reduction working while it reports it off. Whenever `stealthd`
+connects to the headset and finds it reported off, it switches it on and off once, which ends that.
+
 The headset's volume belongs to PipeWire: the headset reports it but takes no writes for it. So `stealthd` finds
 the headset's sound output in PipeWire (with `pw-dump`), serves its volume in percent as `sink_volume`, and sets
 it with `wpctl`. Without those two tools, the volume is shown but can't be changed.

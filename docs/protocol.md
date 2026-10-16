@@ -196,7 +196,7 @@ Matched with the order of the round-1 writes:
 | 600 | `0` | | mute: flip-to-mute up `1`, down `0` **[seen]** |
 | 610 | `51`, `84` | ✎ 100, 0, 84 | sensitivity **[ui]**. The device pushed the new value *before* Swarm II's write, so it follows the PC's mic level (UAC feature unit 6): on Linux it moves with the input volume in pavucontrol **[user]** |
 | 620 | `70`, `85`, `65` | ✎ 0, 100, 85 | monitoring level (hearing your own voice): writing `0` from Linux silenced it, `65` brought it back **[seen]** |
-| 630 | `0` | ✎ 1, 0 | AI noise reduction, `1` = on: the page showed "Off" with `0`, then Swarm II wrote `1` and `0` for on and off **[ui, capture]**. It runs in the headset and changes what the PC records: with steady white noise it took the background from −53 to −75 dBFS (most at 2.5–4 kHz), also between words, and left the voice level alone; monitoring sounds different too **[seen, user]**. Once it was in effect while `630` read `0` (open question 5) |
+| 630 | `0` | ✎ 1, 0 | AI noise reduction, `1` = on: the page showed "Off" with `0`, then Swarm II wrote `1` and `0` for on and off **[ui, capture]**. It runs in the headset and changes what the PC records: with steady white noise it took the background from −53 to −75 dBFS (most at 2.5–4 kHz), also between words, and left the voice level alone; monitoring sounds different too **[seen, user]**. After a restart it can be in effect while `630` reads `0` (open question 5) |
 | 640 | `1` | | **[guess]** monitoring enable: Swarm II only offers it as a hotkey, never wrote it |
 | 650 | `0` | | |
 
@@ -291,9 +291,10 @@ Derived the same way, from pushes in the order 1 → 2 → 3 → 4 (seen twice, 
    show).
 3. How are writes longer than one report sent? (None seen so far; preset names keep requests short.)
 4. Does `target = 80` reach the headset directly?
-5. In one recording AI noise reduction was in effect although `630` read `0` (same spectral fingerprint as with it
-   on); writing `1` and then `0` ended it, writing `0` alone did not. The headset had restarted about 20 minutes
-   before. Does it come back from a restart with noise reduction on while reporting it off?
+5. ~~Does the headset come back from a restart with AI noise reduction on while reporting it off?~~ Yes, seen twice:
+   after a restart the background in recordings was 20 dB lower with `630` reading `0`, with the same spectral
+   fingerprint as with it on; writing `1` and then `0` ended it, writing `0` alone did not **[seen]**. `stealthd`
+   switches it on and off whenever the headset connects with `630 = 0`.
 
 ## Sources
 
