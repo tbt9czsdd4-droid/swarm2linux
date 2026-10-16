@@ -97,7 +97,11 @@ fn transmitters(entries: &[String]) -> (Vec<String>, String) {
     for entry in entries {
         let mut parts = entry.split_whitespace();
         let (Some(slot), Some(product), Some(state)) = (parts.next(), parts.next(), parts.next()) else { continue };
-        lines.push(format!("Transmitter {slot} · 10f5:{product} · {state}"));
+        // the headset sometimes reports product 0
+        lines.push(match product {
+            "0" => format!("Transmitter {slot} · {state}"),
+            _ => format!("Transmitter {slot} · 10f5:{product} · {state}"),
+        });
         if slot == "1" {
             hub = capitalized(state);
         }
@@ -193,8 +197,12 @@ mod tests {
 
     #[test]
     fn transmitter_lines() {
-        let (lines, hub) = transmitters(&["2 229b standby".into(), "1 2287 active".into(), "bad".into()]);
-        assert_eq!(lines, ["Transmitter 2 · 10f5:229b · standby", "Transmitter 1 · 10f5:2287 · active"]);
+        let (lines, hub) =
+            transmitters(&["2 229b standby".into(), "1 2287 active".into(), "3 0 standby".into(), "bad".into()]);
+        assert_eq!(
+            lines,
+            ["Transmitter 2 · 10f5:229b · standby", "Transmitter 1 · 10f5:2287 · active", "Transmitter 3 · standby"]
+        );
         assert_eq!(hub, "Active");
         assert_eq!(transmitters(&[]).1, "Not connected");
     }
