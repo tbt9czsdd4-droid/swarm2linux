@@ -71,7 +71,7 @@ the build tools with a normal package manager.
 
 ## Status
 
-Version 1.0. The desktop app `stealth-gui` covers the same settings as Swarm II's pages, with a tray icon for the battery.
+Version 1.1. The desktop app `stealth-gui` covers the same settings as Swarm II's pages, with a tray icon for the battery.
 `stealthctl` reads all 26 records and changes both EQs (presets, bands, saving and deleting custom presets), Superhuman Hearing, ANC, mic monitoring, noise gate, sensitivity and AI noise reduction. It also sets the button and wheel functions, auto shut-off, wake on motion and the charging hub LEDs; that covers every headset setting Swarm II offers on PC except the master-volume mute toggle. See [docs/PLAN.md](docs/PLAN.md) for the roadmap and
 [docs/protocol.md](docs/protocol.md) for what is known about the protocol.
 
