@@ -333,9 +333,6 @@ the volume but can't change it. They come in these packages:
 - **The headset is not found.** `stealthctl devices` lists what is plugged in. After installing the udev rule,
   unplug the transmitter and plug it in again.
 - **No tray icon on GNOME.** GNOME needs the "AppIndicator and KStatusNotifierItem Support" extension.
-- **An extra swarm2linux icon in Plasma's task bar after login.** With **Start with the session** on, the task bar
-  can show a swarm2linux icon next to the tray icon, and clicking it does nothing. Open the app from the tray and
-  close it, and the icon goes away. This is not fixed yet.
 
 ## Status
 

@@ -174,7 +174,13 @@ the fontconfig headers, and suits Swarm II's custom dark look; since 1.18 it has
   complete guide each for Fedora, Ubuntu/Debian (and Mint, Pop!_OS), Arch (and Manjaro, EndeavourOS) and
   openSUSE. Clean Fedora 44, Ubuntu 24.04, Debian 13, Arch and openSUSE Tumbleweed containers ran each guide as
   written, and each installs the same files as `install.sh`.
-- The extra task bar icon after autostart on Plasma is recorded under Known issues.
+- Fixed after 1.3.0: with Start with the session on, Plasma's task bar showed an empty swarm2linux entry after
+  login, next to the tray icon. Clicking it did nothing. Cause: Slint 1.18's winit backend creates the native
+  window for every window component as soon as the event loop starts, whether it is shown or not. On Wayland that
+  is an `xdg_toplevel` (app id, title, 1200×800, a GL surface) with no content, and after login Plasma listed it.
+  Hiding a window destroys it on Wayland, which is why opening and closing the window made the entry go away.
+  `stealth-gui --hidden` now creates only the tray, and makes the window the first time it is opened (from the tray, or
+  from a second start). The bridge keeps what stealthd said last, so the window starts with the current values.
 
 ### Phase 8: Replacements for Windows-only host features
 - **Master volume — done:** the headset's volume (`2a0`) follows the USB playback volume and takes no writes Swarm II
@@ -186,26 +192,6 @@ the fontconfig headers, and suits Swarm II's custom dark look; since 1.18 it has
 - **Dolby Atmos can't be ported** (it's a licensed Windows component). Offer an optional PipeWire filter-chain virtual-surround preset as a substitute.
 - **AI noise reduction:** if Phase 3 shows it runs on the PC rather than the headset, offer a PipeWire noise-suppression substitute (RNNoise or DeepFilterNet).
 - **Out of scope:** other Turtle Beach and Roccat peripherals that Swarm II also manages.
-
-### Known issues
-- **A task bar icon after autostart (Plasma 6.7, Wayland).** When `stealth-gui --hidden` starts with the session,
-  Plasma's task bar shows a swarm2linux icon next to the tray icon. Clicking it does nothing. It goes away once the
-  window has been opened from the tray and closed again.
-  - Found so far:
-    - only that one process runs, started by `app-io.github.swarm2linux@autostart.service`
-      (systemd-xdg-autostart-generator), and its environment has no `XDG_ACTIVATION_TOKEN` or `DESKTOP_STARTUP_ID`
-    - KWin lists no swarm2linux window (WindowsRunner `Match`)
-    - with the tray on, `--hidden` never shows the window; Slint creates the winit window only when it is shown,
-      and the tray (ksni) has none
-    - the behaviour fits Plasma's launch feedback: a startup task waiting for a window with the app id
-      `io.github.swarm2linux`, which the real window later replaces. KWin makes such feedback for activation
-      tokens that carry an app id and reads `X-KDE-StartupNotify`.
-  - Not yet known: who asks for that feedback at login.
-  - Next steps:
-    - see whether `systemctl --user restart app-io.github.swarm2linux@autostart.service` brings the icon back, or
-      only a login does
-    - try `StartupNotify=false` in the autostart entry (`crates/stealth-gui/src/prefs.rs`) or the menu entry
-    - find what requests the token
 
 ### Deferred
 - Firmware updates: document the flow only (`race-toolkit` `librace/fota.py` is a reference). Keep using the iOS app.
