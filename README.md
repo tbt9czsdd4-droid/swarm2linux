@@ -73,25 +73,9 @@ the build tools with a normal package manager.
 ### Step-by-step installation
 
 These are the steps the script takes, as commands you run yourself. Run them as your normal user; `sudo` asks for
-your password where a step needs root. Every distribution goes through the same steps, and only the first two
-differ:
+your password where a step needs root. Every distribution goes through the same basic steps.
 
-1. **Build tools:** a C compiler and linker, pkg-config, the fontconfig headers (the desktop app finds its fonts
-   through fontconfig) and git.
-2. **Rust 1.92 or newer:** the distribution's own Rust where it is new enough (Fedora, Arch, openSUSE Tumbleweed),
-   otherwise [rustup](https://rustup.rs), which installs it for your user in `~/.cargo`. `rustc --version` shows
-   which version you have. If you already use rustup, leave out the distribution's Rust.
-3. **Source:** clone the repository.
-4. **Build:** `--locked` uses the exact dependency versions from `Cargo.lock`. The first build takes a few minutes,
-   and the four programs land in `target/release/`.
-5. **Headset access:** a udev rule lets the logged-in user open the headset; without it only root can.
-6. **Programs:** they go into `~/.local/bin`. Keep them there: the service starts `stealthd` from that folder.
-7. **Service:** `stealthd` talks to the headset for the apps. As a systemd user service, it starts with every
-   login.
-8. **Menu entry and icon:** the entry names the program by its full path, because Plasma's PATH often lacks
-   `~/.local/bin`.
-
-Then follow the guide for your distribution from top to bottom: [Fedora](#fedora),
+Follow the guide for your distribution from top to bottom: [Fedora](#fedora),
 [Ubuntu, Debian, Linux Mint, Pop!_OS](#ubuntu-debian-linux-mint-pop_os),
 [Arch Linux, Manjaro, EndeavourOS](#arch-linux-manjaro-endeavouros) or [openSUSE](#opensuse).
 
