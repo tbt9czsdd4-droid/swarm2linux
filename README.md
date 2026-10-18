@@ -29,7 +29,8 @@ There are two ways to install. Both put the same files in the same places, so yo
 way:
 
 - [**With the script**](#quick-install-with-the-script): `install.sh` runs every step for you.
-- [**Step by step**](#step-by-step-installation): you run each command yourself and see what it does.
+- [**Step by step**](#step-by-step-installation): a guide for each distribution, where you run each command
+  yourself and see what it does.
 
 ### Quick install with the script
 
@@ -71,76 +72,46 @@ the build tools with a normal package manager.
 
 ### Step-by-step installation
 
-These are the steps the script takes. Run them as your normal user; `sudo` asks for your password where a step
-needs root.
+These are the steps the script takes, as commands you run yourself. Run them as your normal user; `sudo` asks for
+your password where a step needs root. Every distribution goes through the same steps, and only the first two
+differ:
 
-**1. Install the build tools.** Building needs a C compiler and linker, pkg-config, the fontconfig headers (the
-desktop app finds its fonts through fontconfig) and git. Fedora, Arch and openSUSE Tumbleweed also ship a recent
-enough Rust, so the commands for them install it too.
+1. **Build tools:** a C compiler and linker, pkg-config, the fontconfig headers (the desktop app finds its fonts
+   through fontconfig) and git.
+2. **Rust 1.92 or newer:** the distribution's own Rust where it is new enough (Fedora, Arch, openSUSE Tumbleweed),
+   otherwise [rustup](https://rustup.rs), which installs it for your user in `~/.cargo`. `rustc --version` shows
+   which version you have. If you already use rustup, leave out the distribution's Rust.
+3. **Source:** clone the repository.
+4. **Build:** `--locked` uses the exact dependency versions from `Cargo.lock`. The first build takes a few minutes,
+   and the four programs land in `target/release/`.
+5. **Headset access:** a udev rule lets the logged-in user open the headset; without it only root can.
+6. **Programs:** they go into `~/.local/bin`. Keep them there: the service starts `stealthd` from that folder.
+7. **Service:** `stealthd` talks to the headset for the apps. As a systemd user service, it starts with every
+   login.
+8. **Menu entry and icon:** the entry names the program by its full path, because Plasma's PATH often lacks
+   `~/.local/bin`.
 
-Fedora:
+Then follow the guide for your distribution from top to bottom: [Fedora](#fedora),
+[Ubuntu, Debian, Linux Mint, Pop!_OS](#ubuntu-debian-linux-mint-pop_os),
+[Arch Linux, Manjaro, EndeavourOS](#arch-linux-manjaro-endeavouros) or [openSUSE](#opensuse).
+
+#### Fedora
+
+Build tools and Rust (steps 1 and 2):
 
 ```sh
 sudo dnf install git gcc pkgconf-pkg-config fontconfig-devel rust cargo
 ```
 
-Arch Linux, Manjaro, EndeavourOS:
-
-```sh
-sudo pacman -S --needed git base-devel fontconfig rust
-```
-
-openSUSE Tumbleweed:
-
-```sh
-sudo zypper install git gcc pkg-config fontconfig-devel rust cargo
-```
-
-Ubuntu, Debian, Linux Mint, Pop!_OS (Rust comes from rustup in step 2):
-
-```sh
-sudo apt update
-sudo apt install git curl build-essential pkg-config libfontconfig-dev
-```
-
-On openSUSE Leap, use the Tumbleweed command without `rust cargo` and get Rust in step 2. If you already use
-rustup, leave out `rust` and `cargo` on any distribution.
-
-**2. Check for Rust 1.92 or newer.**
-
-```sh
-rustc --version
-```
-
-If it says 1.92 or newer, go on to step 3. If Rust is missing or older, install it for your user with
-[rustup](https://rustup.rs), which puts it in `~/.cargo`. Ubuntu, Debian, Mint, Pop!_OS and Leap need this,
-because their own Rust is too old.
-
-```sh
-curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
-. "$HOME/.cargo/env"
-```
-
-rustup asks before it installs; its default answer is fine. The second line makes `cargo` work in this terminal;
-new terminals find it by themselves.
-
-**3. Get the source.**
+Source and build (steps 3 and 4):
 
 ```sh
 git clone https://github.com/tbt9czsdd4-droid/swarm2linux.git
 cd swarm2linux
-```
-
-**4. Build.** It takes a few minutes the first time. `--locked` uses the exact dependency versions from
-`Cargo.lock`.
-
-```sh
 cargo build --release --locked
 ```
 
-The four programs are now in `target/release/`.
-
-**5. Let your user open the headset.** Without this udev rule, only root can reach the headset's settings.
+Headset access (step 5):
 
 ```sh
 sudo install -Dm644 packaging/70-swarm2linux.rules /etc/udev/rules.d/70-swarm2linux.rules
@@ -148,29 +119,13 @@ sudo udevadm control --reload
 sudo udevadm trigger --subsystem-match=hidraw --action=change
 ```
 
-**6. Install the programs** into `~/.local/bin`. Keep them there: the service in step 7 starts `stealthd` from that
-folder.
+Programs, service, menu entry and icon (steps 6 to 8):
 
 ```sh
 install -Dm755 -t ~/.local/bin target/release/{stealthctl,stealthd,stealth-gui,stealth-tui}
-```
-
-**7. Start the background service.** `stealthd` talks to the headset for the apps. As a systemd user service, it
-starts with every login.
-
-```sh
 install -Dm644 packaging/stealthd.service ~/.config/systemd/user/stealthd.service
 systemctl --user daemon-reload
 systemctl --user enable --now stealthd
-systemctl --user is-active stealthd
-```
-
-The last command prints `active`.
-
-**8. Add the app menu entry and its icon.** The entry names the program by its full path, because Plasma's PATH
-often lacks `~/.local/bin`.
-
-```sh
 mkdir -p ~/.local/share/applications
 sed "s|^Exec=stealth-gui|Exec=\"$HOME/.local/bin/stealth-gui\"|" packaging/io.github.swarm2linux.desktop \
     > ~/.local/share/applications/io.github.swarm2linux.desktop
@@ -178,10 +133,158 @@ install -Dm644 packaging/icons/io.github.swarm2linux.svg \
     ~/.local/share/icons/hicolor/scalable/apps/io.github.swarm2linux.svg
 ```
 
-**9. Start it.** Open **swarm2linux** from the app menu, or run `stealth-tui` in a terminal; `stealthctl status`
-prints what the headset reports. If the shell can't find these commands, `~/.local/bin` is not on your PATH: run
-them as `~/.local/bin/stealth-tui` and so on, or add the folder to your PATH. If you want the tray icon after
-login, turn on **Start with the session** on the desktop app's Device page.
+Then go on with [After installing](#after-installing).
+
+#### Ubuntu, Debian, Linux Mint, Pop!_OS
+
+Build tools (step 1):
+
+```sh
+sudo apt update
+sudo apt install git curl build-essential pkg-config libfontconfig-dev
+```
+
+Rust (step 2): the distribution's own Rust is too old, so install it with rustup. rustup asks before it installs,
+and its default answer is fine. The second line makes `cargo` work in this terminal; new terminals find it by
+themselves.
+
+```sh
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+. "$HOME/.cargo/env"
+```
+
+Source and build (steps 3 and 4):
+
+```sh
+git clone https://github.com/tbt9czsdd4-droid/swarm2linux.git
+cd swarm2linux
+cargo build --release --locked
+```
+
+Headset access (step 5):
+
+```sh
+sudo install -Dm644 packaging/70-swarm2linux.rules /etc/udev/rules.d/70-swarm2linux.rules
+sudo udevadm control --reload
+sudo udevadm trigger --subsystem-match=hidraw --action=change
+```
+
+Programs, service, menu entry and icon (steps 6 to 8):
+
+```sh
+install -Dm755 -t ~/.local/bin target/release/{stealthctl,stealthd,stealth-gui,stealth-tui}
+install -Dm644 packaging/stealthd.service ~/.config/systemd/user/stealthd.service
+systemctl --user daemon-reload
+systemctl --user enable --now stealthd
+mkdir -p ~/.local/share/applications
+sed "s|^Exec=stealth-gui|Exec=\"$HOME/.local/bin/stealth-gui\"|" packaging/io.github.swarm2linux.desktop \
+    > ~/.local/share/applications/io.github.swarm2linux.desktop
+install -Dm644 packaging/icons/io.github.swarm2linux.svg \
+    ~/.local/share/icons/hicolor/scalable/apps/io.github.swarm2linux.svg
+```
+
+Then go on with [After installing](#after-installing).
+
+#### Arch Linux, Manjaro, EndeavourOS
+
+Build tools and Rust (steps 1 and 2):
+
+```sh
+sudo pacman -S --needed git base-devel fontconfig rust
+```
+
+Source and build (steps 3 and 4):
+
+```sh
+git clone https://github.com/tbt9czsdd4-droid/swarm2linux.git
+cd swarm2linux
+cargo build --release --locked
+```
+
+Headset access (step 5):
+
+```sh
+sudo install -Dm644 packaging/70-swarm2linux.rules /etc/udev/rules.d/70-swarm2linux.rules
+sudo udevadm control --reload
+sudo udevadm trigger --subsystem-match=hidraw --action=change
+```
+
+Programs, service, menu entry and icon (steps 6 to 8):
+
+```sh
+install -Dm755 -t ~/.local/bin target/release/{stealthctl,stealthd,stealth-gui,stealth-tui}
+install -Dm644 packaging/stealthd.service ~/.config/systemd/user/stealthd.service
+systemctl --user daemon-reload
+systemctl --user enable --now stealthd
+mkdir -p ~/.local/share/applications
+sed "s|^Exec=stealth-gui|Exec=\"$HOME/.local/bin/stealth-gui\"|" packaging/io.github.swarm2linux.desktop \
+    > ~/.local/share/applications/io.github.swarm2linux.desktop
+install -Dm644 packaging/icons/io.github.swarm2linux.svg \
+    ~/.local/share/icons/hicolor/scalable/apps/io.github.swarm2linux.svg
+```
+
+Then go on with [After installing](#after-installing).
+
+#### openSUSE
+
+Build tools and Rust (steps 1 and 2) on Tumbleweed:
+
+```sh
+sudo zypper install git gcc pkg-config fontconfig-devel rust cargo
+```
+
+On Leap, leave out `rust cargo` above, because Leap's Rust is too old. Install it with rustup instead, which asks
+before it installs (its default answer is fine):
+
+```sh
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+. "$HOME/.cargo/env"
+```
+
+Source and build (steps 3 and 4):
+
+```sh
+git clone https://github.com/tbt9czsdd4-droid/swarm2linux.git
+cd swarm2linux
+cargo build --release --locked
+```
+
+Headset access (step 5):
+
+```sh
+sudo install -Dm644 packaging/70-swarm2linux.rules /etc/udev/rules.d/70-swarm2linux.rules
+sudo udevadm control --reload
+sudo udevadm trigger --subsystem-match=hidraw --action=change
+```
+
+Programs, service, menu entry and icon (steps 6 to 8):
+
+```sh
+install -Dm755 -t ~/.local/bin target/release/{stealthctl,stealthd,stealth-gui,stealth-tui}
+install -Dm644 packaging/stealthd.service ~/.config/systemd/user/stealthd.service
+systemctl --user daemon-reload
+systemctl --user enable --now stealthd
+mkdir -p ~/.local/share/applications
+sed "s|^Exec=stealth-gui|Exec=\"$HOME/.local/bin/stealth-gui\"|" packaging/io.github.swarm2linux.desktop \
+    > ~/.local/share/applications/io.github.swarm2linux.desktop
+install -Dm644 packaging/icons/io.github.swarm2linux.svg \
+    ~/.local/share/icons/hicolor/scalable/apps/io.github.swarm2linux.svg
+```
+
+Then go on with [After installing](#after-installing).
+
+#### After installing
+
+Check that the service runs; this prints `active`:
+
+```sh
+systemctl --user is-active stealthd
+```
+
+Then open **swarm2linux** from the app menu, or run `stealth-tui` in a terminal; `stealthctl status` prints what the
+headset reports. If the shell can't find these commands, `~/.local/bin` is not on your PATH: run them as
+`~/.local/bin/stealth-tui` and so on, or add the folder to your PATH. If you want the tray icon after login, turn
+on **Start with the session** on the desktop app's Device page.
 
 #### Try it without installing
 
