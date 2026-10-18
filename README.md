@@ -81,13 +81,13 @@ Follow the guide for your distribution from top to bottom: [Fedora](#fedora),
 
 #### Fedora
 
-Build tools and Rust (steps 1 and 2):
+Build tools and Rust:
 
 ```sh
 sudo dnf install git gcc pkgconf-pkg-config fontconfig-devel rust cargo
 ```
 
-Source and build (steps 3 and 4):
+Source and build:
 
 ```sh
 git clone https://github.com/tbt9czsdd4-droid/swarm2linux.git
@@ -95,7 +95,7 @@ cd swarm2linux
 cargo build --release --locked
 ```
 
-Headset access (step 5):
+Headset access:
 
 ```sh
 sudo install -Dm644 packaging/70-swarm2linux.rules /etc/udev/rules.d/70-swarm2linux.rules
@@ -103,7 +103,7 @@ sudo udevadm control --reload
 sudo udevadm trigger --subsystem-match=hidraw --action=change
 ```
 
-Programs, service, menu entry and icon (steps 6 to 8):
+Programs, service, menu entry and icon:
 
 ```sh
 install -Dm755 -t ~/.local/bin target/release/{stealthctl,stealthd,stealth-gui,stealth-tui}
@@ -121,14 +121,14 @@ Then go on with [After installing](#after-installing).
 
 #### Ubuntu, Debian, Linux Mint, Pop!_OS
 
-Build tools (step 1):
+Build tools:
 
 ```sh
 sudo apt update
 sudo apt install git curl build-essential pkg-config libfontconfig-dev
 ```
 
-Rust (step 2): the distribution's own Rust is too old, so install it with rustup. rustup asks before it installs,
+Rust: the distribution's own Rust is too old, so install it with rustup. rustup asks before it installs,
 and its default answer is fine. The second line makes `cargo` work in this terminal; new terminals find it by
 themselves.
 
@@ -137,7 +137,7 @@ curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 . "$HOME/.cargo/env"
 ```
 
-Source and build (steps 3 and 4):
+Source and build:
 
 ```sh
 git clone https://github.com/tbt9czsdd4-droid/swarm2linux.git
@@ -145,7 +145,7 @@ cd swarm2linux
 cargo build --release --locked
 ```
 
-Headset access (step 5):
+Headset access:
 
 ```sh
 sudo install -Dm644 packaging/70-swarm2linux.rules /etc/udev/rules.d/70-swarm2linux.rules
@@ -153,7 +153,7 @@ sudo udevadm control --reload
 sudo udevadm trigger --subsystem-match=hidraw --action=change
 ```
 
-Programs, service, menu entry and icon (steps 6 to 8):
+Programs, service, menu entry and icon:
 
 ```sh
 install -Dm755 -t ~/.local/bin target/release/{stealthctl,stealthd,stealth-gui,stealth-tui}
@@ -171,13 +171,13 @@ Then go on with [After installing](#after-installing).
 
 #### Arch Linux, Manjaro, EndeavourOS
 
-Build tools and Rust (steps 1 and 2):
+Build tools and Rust:
 
 ```sh
 sudo pacman -S --needed git base-devel fontconfig rust
 ```
 
-Source and build (steps 3 and 4):
+Source and build:
 
 ```sh
 git clone https://github.com/tbt9czsdd4-droid/swarm2linux.git
@@ -185,7 +185,7 @@ cd swarm2linux
 cargo build --release --locked
 ```
 
-Headset access (step 5):
+Headset access:
 
 ```sh
 sudo install -Dm644 packaging/70-swarm2linux.rules /etc/udev/rules.d/70-swarm2linux.rules
@@ -193,7 +193,7 @@ sudo udevadm control --reload
 sudo udevadm trigger --subsystem-match=hidraw --action=change
 ```
 
-Programs, service, menu entry and icon (steps 6 to 8):
+Programs, service, menu entry and icon:
 
 ```sh
 install -Dm755 -t ~/.local/bin target/release/{stealthctl,stealthd,stealth-gui,stealth-tui}
@@ -211,7 +211,7 @@ Then go on with [After installing](#after-installing).
 
 #### openSUSE
 
-Build tools and Rust (steps 1 and 2) on Tumbleweed:
+Build tools and Rust on Tumbleweed:
 
 ```sh
 sudo zypper install git gcc pkg-config fontconfig-devel rust cargo
@@ -225,7 +225,7 @@ curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 . "$HOME/.cargo/env"
 ```
 
-Source and build (steps 3 and 4):
+Source and build:
 
 ```sh
 git clone https://github.com/tbt9czsdd4-droid/swarm2linux.git
@@ -233,7 +233,7 @@ cd swarm2linux
 cargo build --release --locked
 ```
 
-Headset access (step 5):
+Headset access:
 
 ```sh
 sudo install -Dm644 packaging/70-swarm2linux.rules /etc/udev/rules.d/70-swarm2linux.rules
@@ -241,7 +241,7 @@ sudo udevadm control --reload
 sudo udevadm trigger --subsystem-match=hidraw --action=change
 ```
 
-Programs, service, menu entry and icon (steps 6 to 8):
+Programs, service, menu entry and icon:
 
 ```sh
 install -Dm755 -t ~/.local/bin target/release/{stealthctl,stealthd,stealth-gui,stealth-tui}
@@ -272,7 +272,8 @@ on **Start with the session** on the desktop app's Device page.
 
 #### Try it without installing
 
-After steps 1 to 5 you can run the programs from the build folder, each in its own terminal:
+Once your guide's build and headset access steps are done, you can run the programs from the build folder,
+each in its own terminal:
 
 ```sh
 ./target/release/stealthd
