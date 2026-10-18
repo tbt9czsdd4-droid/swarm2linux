@@ -29,7 +29,8 @@ export component Tray inherits SystemTrayIcon {
         : !Headset.connected ? "no transmitter"
         : !Headset.headset-link ? "headset off"
         : Headset.battery < 0 ? "battery unknown"
-        : "battery " + Headset.battery + "%" + (Headset.charging ? ", charging" : ""));
+        : "battery " + Headset.battery + "%" + (Headset.charging ? ", charging" : ""))
+        + (Headset.daemon-running && Headset.connected && Headset.headset-link && Headset.mic-muted ? ", mic muted" : "");
     clicked => { root.toggle-window(); }
 
     Menu {

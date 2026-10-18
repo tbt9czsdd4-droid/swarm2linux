@@ -181,6 +181,11 @@ the fontconfig headers, and suits Swarm II's custom dark look; since 1.18 it has
   Hiding a window destroys it on Wayland, which is why opening and closing the window made the entry go away.
   `stealth-gui --hidden` now creates only the tray, and makes the window the first time it is opened (from the tray, or
   from a second start). The bridge keeps what stealthd said last, so the window starts with the current values.
+- After 1.3.0: the tray icon shows a red badge with a crossed-out microphone while the mic is muted, and the
+  tooltip says "mic muted". Building it showed that the tray's icon and tooltip were always one update behind:
+  Slint hands changed tray properties to the tray only at the start of an event loop iteration, and without a
+  window nothing starts one until the next update arrives. The tray now wakes the loop with a zero timer after
+  each update.
 
 ### Phase 8: Replacements for Windows-only host features
 - **Master volume — done:** the headset's volume (`2a0`) follows the USB playback volume and takes no writes Swarm II

@@ -371,9 +371,9 @@ A Slint app in the style of Swarm II, with four pages:
   battery pop-ups, the tray icon and starting with the session.
 
 It is a client of `stealthd` and needs it running. The tray icon shows the battery as a headset whose ear cups
-fill up; its menu switches noise cancellation, Superhuman Hearing and the game EQ preset. Closing the window keeps
-the app in the tray (turn the tray off on the Device page to quit on close), and `stealth-gui --hidden` starts in
-the tray.
+fill up, with a red badge under the headband while the mic is muted. Its menu switches noise cancellation,
+Superhuman Hearing and the game EQ preset. Closing the window keeps the app in the tray (turn the tray off on the
+Device page to quit on close), and `stealth-gui --hidden` starts in the tray.
 
 Built with [Slint](https://slint.dev) under its royalty-free licence; the Device page carries the credit.
 
