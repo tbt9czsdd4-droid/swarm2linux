@@ -154,8 +154,6 @@ the fontconfig headers, and suits Swarm II's custom dark look; since 1.18 it has
   `--uninstall` removes it again. Checked on clean Fedora 44 and Ubuntu 24.04 containers.
 - Not covered: immutable systems (Bazzite, Kinoite, Silverblue, SteamOS) and prebuilt binaries or distribution
   packages (RPM, Flatpak).
-- Later: the README also walks through the same steps by hand for Fedora, Arch, openSUSE and Debian/Ubuntu.
-  Containers of each ran the README's commands, and they install the same files as `install.sh`.
 
 ### Release 1.1 — done
 - The master volume is adjustable from the app and with `stealthctl volume`, through PipeWire (see Phase 8).
@@ -170,6 +168,13 @@ the fontconfig headers, and suits Swarm II's custom dark look; since 1.18 it has
   and `stealth_dbus::view` (the preset name check, transmitter lines and EQ Cancel).
 - `install.sh` installs it with the other programs.
 - 1.2.1: `H`/`L` and `Shift-←`/`Shift-→` switch pages; the ±10 slider step moves to `Ctrl-←`/`Ctrl-→` (or a count).
+
+### Release 1.3 — done
+- The README has a step-by-step installation next to `install.sh`: the shared steps explained once, then a
+  complete guide each for Fedora, Ubuntu/Debian (and Mint, Pop!_OS), Arch (and Manjaro, EndeavourOS) and
+  openSUSE. Clean Fedora 44, Ubuntu 24.04, Debian 13, Arch and openSUSE Tumbleweed containers ran each guide as
+  written, and each installs the same files as `install.sh`.
+- The extra task bar icon after autostart on Plasma is recorded under Known issues.
 
 ### Phase 8: Replacements for Windows-only host features
 - **Master volume — done:** the headset's volume (`2a0`) follows the USB playback volume and takes no writes Swarm II

@@ -355,7 +355,7 @@ the volume but can't change it. They come in these packages:
 
 ## Status
 
-Version 1.2. The desktop app `stealth-gui` covers the same settings as Swarm II's pages, with a tray icon for the
+Version 1.3. The desktop app `stealth-gui` covers the same settings as Swarm II's pages, with a tray icon for the
 battery, and the terminal app `stealth-tui` has the same pages with vim keys.
 `stealthctl` reads all 26 records and changes both EQs (presets, bands, saving and deleting custom presets), Superhuman Hearing, ANC, mic monitoring, noise gate, sensitivity and AI noise reduction. It also sets the button and wheel functions, auto shut-off, wake on motion and the charging hub LEDs; that covers every headset setting Swarm II offers on PC except the master-volume mute toggle. See [docs/PLAN.md](docs/PLAN.md) for the roadmap and
 [docs/protocol.md](docs/protocol.md) for what is known about the protocol.
