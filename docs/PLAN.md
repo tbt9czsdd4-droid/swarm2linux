@@ -154,6 +154,8 @@ the fontconfig headers, and suits Swarm II's custom dark look; since 1.18 it has
   `--uninstall` removes it again. Checked on clean Fedora 44 and Ubuntu 24.04 containers.
 - Not covered: immutable systems (Bazzite, Kinoite, Silverblue, SteamOS) and prebuilt binaries or distribution
   packages (RPM, Flatpak).
+- Later: the README also walks through the same steps by hand for Fedora, Arch, openSUSE and Debian/Ubuntu.
+  Containers of each ran the README's commands, and they install the same files as `install.sh`.
 
 ### Release 1.1 — done
 - The master volume is adjustable from the app and with `stealthctl volume`, through PipeWire (see Phase 8).
@@ -179,6 +181,26 @@ the fontconfig headers, and suits Swarm II's custom dark look; since 1.18 it has
 - **Dolby Atmos can't be ported** (it's a licensed Windows component). Offer an optional PipeWire filter-chain virtual-surround preset as a substitute.
 - **AI noise reduction:** if Phase 3 shows it runs on the PC rather than the headset, offer a PipeWire noise-suppression substitute (RNNoise or DeepFilterNet).
 - **Out of scope:** other Turtle Beach and Roccat peripherals that Swarm II also manages.
+
+### Known issues
+- **A task bar icon after autostart (Plasma 6.7, Wayland).** When `stealth-gui --hidden` starts with the session,
+  Plasma's task bar shows a swarm2linux icon next to the tray icon. Clicking it does nothing. It goes away once the
+  window has been opened from the tray and closed again.
+  - Found so far:
+    - only that one process runs, started by `app-io.github.swarm2linux@autostart.service`
+      (systemd-xdg-autostart-generator), and its environment has no `XDG_ACTIVATION_TOKEN` or `DESKTOP_STARTUP_ID`
+    - KWin lists no swarm2linux window (WindowsRunner `Match`)
+    - with the tray on, `--hidden` never shows the window; Slint creates the winit window only when it is shown,
+      and the tray (ksni) has none
+    - the behaviour fits Plasma's launch feedback: a startup task waiting for a window with the app id
+      `io.github.swarm2linux`, which the real window later replaces. KWin makes such feedback for activation
+      tokens that carry an app id and reads `X-KDE-StartupNotify`.
+  - Not yet known: who asks for that feedback at login.
+  - Next steps:
+    - see whether `systemctl --user restart app-io.github.swarm2linux@autostart.service` brings the icon back, or
+      only a login does
+    - try `StartupNotify=false` in the autostart entry (`crates/stealth-gui/src/prefs.rs`) or the menu entry
+    - find what requests the token
 
 ### Deferred
 - Firmware updates: document the flow only (`race-toolkit` `librace/fota.py` is a reference). Keep using the iOS app.

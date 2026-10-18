@@ -25,6 +25,14 @@ This is an independent interoperability project and is not affiliated with Turtl
 You need Linux with a systemd user session and PipeWire, such as Fedora, Ubuntu, Debian, Arch or openSUSE with
 KDE Plasma or GNOME, and the headset's USB transmitter (or its USB-C cable).
 
+There are two ways to install. Both put the same files in the same places, so you can update or uninstall either
+way:
+
+- [**With the script**](#quick-install-with-the-script): `install.sh` runs every step for you.
+- [**Step by step**](#step-by-step-installation): you run each command yourself and see what it does.
+
+### Quick install with the script
+
 ```sh
 git clone https://github.com/tbt9czsdd4-droid/swarm2linux.git
 cd swarm2linux
@@ -61,6 +69,176 @@ The script was tested on Fedora 44 with KDE Plasma, and on clean Fedora 44 and U
 not support immutable systems such as Bazzite, Fedora Kinoite or Silverblue, and SteamOS yet: those can't install
 the build tools with a normal package manager.
 
+### Step-by-step installation
+
+These are the steps the script takes. Run them as your normal user; `sudo` asks for your password where a step
+needs root.
+
+**1. Install the build tools.** Building needs a C compiler and linker, pkg-config, the fontconfig headers (the
+desktop app finds its fonts through fontconfig) and git. Fedora, Arch and openSUSE Tumbleweed also ship a recent
+enough Rust, so the commands for them install it too.
+
+Fedora:
+
+```sh
+sudo dnf install git gcc pkgconf-pkg-config fontconfig-devel rust cargo
+```
+
+Arch Linux, Manjaro, EndeavourOS:
+
+```sh
+sudo pacman -S --needed git base-devel fontconfig rust
+```
+
+openSUSE Tumbleweed:
+
+```sh
+sudo zypper install git gcc pkg-config fontconfig-devel rust cargo
+```
+
+Ubuntu, Debian, Linux Mint, Pop!_OS (Rust comes from rustup in step 2):
+
+```sh
+sudo apt update
+sudo apt install git curl build-essential pkg-config libfontconfig-dev
+```
+
+On openSUSE Leap, use the Tumbleweed command without `rust cargo` and get Rust in step 2. If you already use
+rustup, leave out `rust` and `cargo` on any distribution.
+
+**2. Check for Rust 1.92 or newer.**
+
+```sh
+rustc --version
+```
+
+If it says 1.92 or newer, go on to step 3. If Rust is missing or older, install it for your user with
+[rustup](https://rustup.rs), which puts it in `~/.cargo`. Ubuntu, Debian, Mint, Pop!_OS and Leap need this,
+because their own Rust is too old.
+
+```sh
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+. "$HOME/.cargo/env"
+```
+
+rustup asks before it installs; its default answer is fine. The second line makes `cargo` work in this terminal;
+new terminals find it by themselves.
+
+**3. Get the source.**
+
+```sh
+git clone https://github.com/tbt9czsdd4-droid/swarm2linux.git
+cd swarm2linux
+```
+
+**4. Build.** It takes a few minutes the first time. `--locked` uses the exact dependency versions from
+`Cargo.lock`.
+
+```sh
+cargo build --release --locked
+```
+
+The four programs are now in `target/release/`.
+
+**5. Let your user open the headset.** Without this udev rule, only root can reach the headset's settings.
+
+```sh
+sudo install -Dm644 packaging/70-swarm2linux.rules /etc/udev/rules.d/70-swarm2linux.rules
+sudo udevadm control --reload
+sudo udevadm trigger --subsystem-match=hidraw --action=change
+```
+
+**6. Install the programs** into `~/.local/bin`. Keep them there: the service in step 7 starts `stealthd` from that
+folder.
+
+```sh
+install -Dm755 -t ~/.local/bin target/release/{stealthctl,stealthd,stealth-gui,stealth-tui}
+```
+
+**7. Start the background service.** `stealthd` talks to the headset for the apps. As a systemd user service, it
+starts with every login.
+
+```sh
+install -Dm644 packaging/stealthd.service ~/.config/systemd/user/stealthd.service
+systemctl --user daemon-reload
+systemctl --user enable --now stealthd
+systemctl --user is-active stealthd
+```
+
+The last command prints `active`.
+
+**8. Add the app menu entry and its icon.** The entry names the program by its full path, because Plasma's PATH
+often lacks `~/.local/bin`.
+
+```sh
+mkdir -p ~/.local/share/applications
+sed "s|^Exec=stealth-gui|Exec=\"$HOME/.local/bin/stealth-gui\"|" packaging/io.github.swarm2linux.desktop \
+    > ~/.local/share/applications/io.github.swarm2linux.desktop
+install -Dm644 packaging/icons/io.github.swarm2linux.svg \
+    ~/.local/share/icons/hicolor/scalable/apps/io.github.swarm2linux.svg
+```
+
+**9. Start it.** Open **swarm2linux** from the app menu, or run `stealth-tui` in a terminal; `stealthctl status`
+prints what the headset reports. If the shell can't find these commands, `~/.local/bin` is not on your PATH: run
+them as `~/.local/bin/stealth-tui` and so on, or add the folder to your PATH. If you want the tray icon after
+login, turn on **Start with the session** on the desktop app's Device page.
+
+#### Try it without installing
+
+After steps 1 to 5 you can run the programs from the build folder, each in its own terminal:
+
+```sh
+./target/release/stealthd
+```
+
+```sh
+./target/release/stealth-gui    # or ./target/release/stealth-tui
+```
+
+`Ctrl-C` in the first terminal stops `stealthd`.
+
+#### Update by hand
+
+```sh
+git pull
+cargo build --release --locked
+install -Dm755 -t ~/.local/bin target/release/{stealthctl,stealthd,stealth-gui,stealth-tui}
+systemctl --user restart stealthd
+```
+
+Then quit the desktop app from its tray menu and start it again. `./install.sh` does the same, and also brings the
+service, the menu entry and the udev rule up to date in case they changed.
+
+#### Uninstall by hand
+
+Quit the desktop app from its tray menu, then:
+
+```sh
+systemctl --user disable --now stealthd
+rm -f ~/.local/bin/{stealthctl,stealthd,stealth-gui,stealth-tui}
+rm -f ~/.config/systemd/user/stealthd.service ~/.config/autostart/io.github.swarm2linux.desktop
+rm -f ~/.local/share/applications/io.github.swarm2linux.desktop
+rm -f ~/.local/share/icons/hicolor/scalable/apps/io.github.swarm2linux.svg
+systemctl --user daemon-reload
+sudo rm -f /etc/udev/rules.d/70-swarm2linux.rules
+sudo udevadm control --reload
+```
+
+This keeps your app preferences in `~/.config/swarm2linux` and Rust; `rustup self uninstall` removes a rustup
+install.
+
+#### What it needs while running
+
+The master volume uses PipeWire's `pw-dump` and `wpctl`. Desktop installs have both; without them the app shows
+the volume but can't change it. They come in these packages:
+
+| Distribution | Packages |
+|---|---|
+| Fedora | `pipewire-utils wireplumber` |
+| Ubuntu, Debian, Mint, Pop!_OS | `pipewire-bin wireplumber` |
+| Arch, Manjaro, EndeavourOS | `pipewire wireplumber` |
+| openSUSE | `pipewire-tools wireplumber` |
+
 ### Troubleshooting
 
 - **The app says "stealthd is not running".** Check the service with `systemctl --user status stealthd`; its log
@@ -68,6 +246,9 @@ the build tools with a normal package manager.
 - **The headset is not found.** `stealthctl devices` lists what is plugged in. After installing the udev rule,
   unplug the transmitter and plug it in again.
 - **No tray icon on GNOME.** GNOME needs the "AppIndicator and KStatusNotifierItem Support" extension.
+- **An extra swarm2linux icon in Plasma's task bar after login.** With **Start with the session** on, the task bar
+  can show a swarm2linux icon next to the tray icon, and clicking it does nothing. Open the app from the tray and
+  close it, and the icon goes away. This is not fixed yet.
 
 ## Status
 
